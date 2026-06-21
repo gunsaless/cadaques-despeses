@@ -304,7 +304,7 @@
     </div>
     <div class="card">
       <h2>Cost per franja</h2>
-      <p class="small">Cost mitjà aproximat de cada franja en un dia.</p>
+      <p class="small">Cost mitjà aproximat de cada franja per persona.</p>
       <div id="byCategory"></div>
     </div>
     <div class="card">
@@ -803,8 +803,8 @@ function renderComptes() {
     <div class="balance-row"><span>Despesa total</span><span class="amount">${eur(total)}</span></div>
     <div class="balance-row"><span>Nombre de despeses</span><span>${state.expenses.length}</span></div>`;
 
-  // Cost per franja: reparteix cada despesa entre els àpats i fa la mitjana per dia
-  const cat = {}; // key -> { total, days:Set(idx) }
+  // Cost per franja: reparteix cada despesa entre els àpats i fa la mitjana per dia i per persona
+  const cat = {}; // key -> { total, days:Set(idx), att }
   state.expenses.forEach(e => {
     const idxs = e.scope === "all"
       ? state.meals.map((_,i)=>i).filter(i => !state.restaurants[i])
@@ -817,18 +817,19 @@ function renderComptes() {
       if (att === 0) return;
       const portion = perUnit * mealWeight(idx) * att;
       const key = state.restaurants[idx] ? "🍽️ Restaurant" : (state.meals[idx] ? state.meals[idx].type : "?");
-      if (!cat[key]) cat[key] = { total: 0, days: new Set() };
+      if (!cat[key]) cat[key] = { total: 0, days: new Set(), att: 0 };
       cat[key].total += portion;
       cat[key].days.add(idx);
+      cat[key].att += att;
     });
   });
   const catEntries = Object.entries(cat)
-    .map(([k, v]) => [k, v.total / v.days.size, v.days.size])
-    .sort((a,b) => b[1] - a[1]);
+    .map(([k, v]) => ({ k, perPerson: v.total / v.att, n: v.days.size }))
+    .sort((a,b) => b.perPerson - a.perPerson);
   const cdiv = document.getElementById("byCategory");
   cdiv.innerHTML = catEntries.length
-    ? catEntries.map(([k, avg, n]) =>
-        `<div class="balance-row"><span>${esc(k)}<div class="small">mitjana de ${n} ${n===1?'dia':'dies'}</div></span><span class="amount">${eur(avg)}/dia</span></div>`).join("")
+    ? catEntries.map(c =>
+        `<div class="balance-row"><span>${esc(c.k)}<div class="small">mitjana de ${c.n} ${c.n===1?'dia':'dies'}</div></span><span class="amount">${eur(c.perPerson)}/persona</span></div>`).join("")
     : '<div class="empty">Encara no hi ha despeses.</div>';
 
   const bdiv = document.getElementById("balances");
