@@ -16,6 +16,26 @@
     --muted: #6b7d73;
     --red: #c0563f;
     --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+    --rest-bg: #fdf3e3;
+    --rest-text: #8a5a12;
+    --rest-head: #f6d79a;
+    --rest-head-text: #7a4e0c;
+  }
+  body.dark {
+    --green: #58b083;
+    --green-light: #2a3d34;
+    --green-dark: #21302a;
+    --bg: #14181a;
+    --card: #1e2426;
+    --border: #313b3e;
+    --text: #e6ece9;
+    --muted: #93a39b;
+    --red: #e07a63;
+    --shadow: 0 1px 3px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3);
+    --rest-bg: #3a2f1a;
+    --rest-text: #e8c486;
+    --rest-head: #4a3a1c;
+    --rest-head-text: #f0d49a;
   }
   * { box-sizing: border-box; }
   body {
@@ -30,7 +50,15 @@
     color: #fff;
     padding: 18px 20px;
     text-align: center;
+    position: relative;
   }
+  #themeToggle {
+    position: absolute; top: 12px; right: 12px;
+    background: rgba(255,255,255,.15); color: #fff;
+    border-radius: 50%; width: 38px; height: 38px; padding: 0;
+    font-size: 1.1rem; line-height: 1;
+  }
+  #themeToggle:hover { background: rgba(255,255,255,.28); }
   header h1 { margin: 0; font-size: 1.4rem; letter-spacing: .5px; }
   header p { margin: 4px 0 0; opacity: .85; font-size: .85rem; }
   .tabs {
@@ -132,8 +160,8 @@
     content: "🍽️"; font-size: 12px;
     position: absolute; left: 50%; top: 50%; transform: translate(-50%,-52%);
   }
-  table.att td.restlabel { background: #fdf3e3; color: #8a5a12; font-weight: 600; }
-  table.att th.meal.is-rest { background: #f6d79a; color: #7a4e0c; }
+  table.att td.restlabel { background: var(--rest-bg); color: var(--rest-text); font-weight: 600; }
+  table.att th.meal.is-rest { background: var(--rest-head); color: var(--rest-head-text); }
   .expense {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -191,6 +219,7 @@
 </head>
 <body>
 <header>
+  <button id="themeToggle" title="Mode nit / dia">🌙</button>
   <h1>🏖️ Despeses Cadaqués 2026</h1>
   <p>Reparteix les despeses segons qui hi és a cada àpat</p>
   <p id="syncBadge" style="margin-top:6px;font-size:.78rem;font-weight:600">…</p>
@@ -874,6 +903,24 @@ document.getElementById("expenseList").addEventListener("click", e => {
   if (tg) tg.nextElementSibling.classList.toggle("show");
 });
 document.getElementById("btnCancelEdit").addEventListener("click", cancelEdit);
+
+// ---------- Mode nit ----------
+function applyTheme(dark) {
+  document.body.classList.toggle("dark", dark);
+  document.getElementById("themeToggle").textContent = dark ? "☀️" : "🌙";
+}
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem("cadaques-theme"); } catch(e) {}
+  const dark = saved ? saved === "dark"
+    : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  applyTheme(dark);
+})();
+document.getElementById("themeToggle").addEventListener("click", () => {
+  const dark = !document.body.classList.contains("dark");
+  applyTheme(dark);
+  try { localStorage.setItem("cadaques-theme", dark ? "dark" : "light"); } catch(e) {}
+});
 
 renderAll();
 onScopeChange();
