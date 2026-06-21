@@ -183,17 +183,6 @@
         <button onclick="addPerson()">Afegir persona</button>
       </div>
     </div>
-
-    <div class="card">
-      <h2>Àpats</h2>
-      <p class="small">Cada àpat té un dia i un tipus. Pots afegir-ne o treure'n.</p>
-      <div class="pill-people" id="mealPills"></div>
-      <div class="row">
-        <input type="text" id="newMealDay" placeholder="Dia (ex: Dijous 25)" style="flex:1">
-        <input type="text" id="newMealType" placeholder="Tipus (ex: Sopar)" style="flex:1">
-        <button onclick="addMeal()">Afegir àpat</button>
-      </div>
-    </div>
   </section>
 
   <!-- DESPESES -->
@@ -384,33 +373,6 @@ function removePerson(p) {
   save(); renderAll();
 }
 
-function renderMeals() {
-  const c = document.getElementById("mealPills");
-  c.innerHTML = state.meals.map((mm, idx) =>
-    `<span class="pill">${esc(mm.day)} · ${esc(mm.type)} <button onclick="removeMeal(${idx})" title="Treure">×</button></span>`
-  ).join("");
-}
-function addMeal() {
-  const d = document.getElementById("newMealDay").value.trim();
-  const ty = document.getElementById("newMealType").value.trim();
-  if (!d || !ty) return;
-  state.meals.push({day:d, type:ty});
-  state.people.forEach(p => state.attendance[p].push(false));
-  document.getElementById("newMealDay").value = "";
-  document.getElementById("newMealType").value = "";
-  save(); renderAll();
-}
-function removeMeal(idx) {
-  if (!confirm("Treure aquest àpat?")) return;
-  state.meals.splice(idx, 1);
-  state.people.forEach(p => state.attendance[p].splice(idx, 1));
-  // netejar referències a despeses
-  state.expenses.forEach(e => {
-    if (e.scope === "meals") e.meals = e.meals.filter(i => i !== idx).map(i => i > idx ? i-1 : i);
-  });
-  save(); renderAll();
-}
-
 // ---------- Despeses ----------
 function renderPayerSelect() {
   const s = document.getElementById("expPayer");
@@ -569,7 +531,6 @@ function escAttr(s){ return String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;')
 function renderAll() {
   renderAttendance();
   renderPeople();
-  renderMeals();
   renderPayerSelect();
   renderMealChecks();
   renderExpenses();
