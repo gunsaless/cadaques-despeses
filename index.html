@@ -180,7 +180,7 @@
       <div class="pill-people" id="peoplePills"></div>
       <div class="row">
         <input type="text" id="newPerson" placeholder="Nom nou…">
-        <button onclick="addPerson()">Afegir persona</button>
+        <button id="btnAddPerson">Afegir persona</button>
       </div>
     </div>
   </section>
@@ -205,7 +205,7 @@
       </div>
       <div class="field">
         <label>Com es reparteix?</label>
-        <select id="expScope" style="width:100%" onchange="onScopeChange()">
+        <select id="expScope" style="width:100%">
           <option value="all">Tot el viatge — entre tothom, segons quants àpats fa cadascú</option>
           <option value="meals">Àpats concrets — només entre els qui hi són en aquells àpats</option>
         </select>
@@ -214,7 +214,7 @@
         <label>Selecciona els àpats</label>
         <div class="meal-checks" id="expMealChecks"></div>
       </div>
-      <button onclick="addExpense()">Afegir despesa</button>
+      <button id="btnAddExpense">Afegir despesa</button>
     </div>
 
     <div class="card">
@@ -322,13 +322,13 @@ function renderAttendance() {
   mealRow += '</tr>';
 
   let body = '';
-  state.people.forEach(p => {
+  state.people.forEach((p, pi) => {
     body += `<tr><td class="name">${esc(p)}</td>`;
     let count = 0;
     m.forEach((mm, idx) => {
       const on = state.attendance[p] && state.attendance[p][idx];
       if (on) count++;
-      body += `<td class="${on?'present':''}"><span class="chk ${on?'on':''}" onclick="toggleAtt('${escAttr(p)}',${idx})"></span></td>`;
+      body += `<td class="${on?'present':''}"><span class="chk ${on?'on':''}" data-pi="${pi}" data-mi="${idx}"></span></td>`;
     });
     body += `<td class="total">${count}</td></tr>`;
   });
@@ -344,17 +344,23 @@ function renderAttendance() {
   t.innerHTML = dayRow + mealRow + body + totRow;
 }
 
-function toggleAtt(p, idx) {
+// Event delegation: un sol listener per a tota la taula
+document.getElementById("attTable").addEventListener("click", (ev) => {
+  const cell = ev.target.closest(".chk");
+  if (!cell) return;
+  const p = state.people[parseInt(cell.dataset.pi)];
+  const idx = parseInt(cell.dataset.mi);
+  if (p === undefined || isNaN(idx)) return;
   if (!state.attendance[p]) state.attendance[p] = state.meals.map(() => false);
   state.attendance[p][idx] = !state.attendance[p][idx];
   save();
   renderAttendance();
-}
+});
 
 function renderPeople() {
   const c = document.getElementById("peoplePills");
   c.innerHTML = state.people.map(p =>
-    `<span class="pill">${esc(p)} <button onclick="removePerson('${escAttr(p)}')" title="Treure">×</button></span>`
+    `<span class="pill">${esc(p)} <button class="rm-person" data-pi="${state.people.indexOf(p)}" title="Treure">×</button></span>`
   ).join("");
 }
 function addPerson() {
@@ -385,7 +391,7 @@ function onScopeChange() {
 function renderMealChecks() {
   const c = document.getElementById("expMealChecks");
   c.innerHTML = state.meals.map((mm, idx) =>
-    `<span class="mc" data-idx="${idx}" onclick="this.classList.toggle('on')">${esc(mm.day)} · ${esc(mm.type)}</span>`
+    `<span class="mc" data-idx="${idx}">${esc(mm.day)} · ${esc(mm.type)}</span>`
   ).join("");
 }
 function addExpense() {
@@ -455,10 +461,10 @@ function renderExpenses() {
           </div>
           <div style="text-align:right">
             <div class="amount">${eur(e.amount)}</div>
-            <button class="danger" onclick="removeExpense('${e.id}')">Esborrar</button>
+            <button class="danger rm-expense" data-id="${e.id}">Esborrar</button>
           </div>
         </div>
-        <button class="ghost" style="margin-top:8px;font-size:.8rem;padding:5px 10px" onclick="this.nextElementSibling.classList.toggle('show')">Veure repartiment ▾</button>
+        <button class="ghost toggle-bd" style="margin-top:8px;font-size:.8rem;padding:5px 10px">Veure repartiment ▾</button>
         <div class="breakdown">
           <table>${rows}</table>
         </div>
@@ -535,6 +541,28 @@ function renderAll() {
   renderMealChecks();
   renderExpenses();
 }
+
+// ---------- Listeners (event delegation) ----------
+document.getElementById("btnAddPerson").addEventListener("click", addPerson);
+document.getElementById("newPerson").addEventListener("keydown", e => { if (e.key === "Enter") addPerson(); });
+document.getElementById("btnAddExpense").addEventListener("click", addExpense);
+document.getElementById("expScope").addEventListener("change", onScopeChange);
+
+document.getElementById("peoplePills").addEventListener("click", e => {
+  const b = e.target.closest(".rm-person");
+  if (b) removePerson(state.people[parseInt(b.dataset.pi)]);
+});
+document.getElementById("expMealChecks").addEventListener("click", e => {
+  const mc = e.target.closest(".mc");
+  if (mc) mc.classList.toggle("on");
+});
+document.getElementById("expenseList").addEventListener("click", e => {
+  const rm = e.target.closest(".rm-expense");
+  if (rm) { removeExpense(rm.dataset.id); return; }
+  const tg = e.target.closest(".toggle-bd");
+  if (tg) tg.nextElementSibling.classList.toggle("show");
+});
+
 renderAll();
 onScopeChange();
 </script>
