@@ -748,14 +748,12 @@ function addPerson() {
   state.people.push(name);
   state.attendance[name] = state.meals.map(() => false);
   inp.value = "";
-  cloudInitPersonAttendance(name);
   save(); renderAll();
 }
 async function removePerson(p) {
   if (!await askConfirm(`Treure ${p}? Les despeses que ha pagat es mantindran.`)) return;
   state.people = state.people.filter(x => x !== p);
   delete state.attendance[p];
-  cloudRemovePersonAttendance(p);
   save(); renderAll();
 }
 async function renamePerson(oldName) {
@@ -774,8 +772,7 @@ async function renamePerson(oldName) {
     if (s.from === oldName) s.from = name;
     if (s.to === oldName) s.to = name;
   });
-  if (useCloud && !applyingRemote) cloudRemovePersonAttendance(oldName);
-  save(); // pushEventFull reescriu tot (inclou l'assistència amb el nou nom)
+  save(); // pushEventFull reescriu tot el node (inclou l'assistència amb el nou nom)
   renderAll();
 }
 
