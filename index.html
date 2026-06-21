@@ -312,11 +312,6 @@
       <div id="byCategory"></div>
     </div>
     <div class="card">
-      <h2>Balanç per persona</h2>
-      <p class="small">Positiu = li deuen diners. Negatiu = ha de pagar.</p>
-      <div id="balances"></div>
-    </div>
-    <div class="card">
       <h2>Resum per persona</h2>
       <p class="small">Què ha de pagar i a qui, i qui li ha de pagar a ell/a.</p>
       <div id="perPerson"></div>
@@ -844,16 +839,6 @@ function renderComptes() {
     ? catEntries.map(c =>
         `<div class="balance-row"><span>${esc(c.k)}<div class="small">mitjana de ${c.n} ${c.n===1?'dia':'dies'}</div></span><span class="amount">${eur(c.perPerson)}/persona</span></div>`).join("")
     : '<div class="empty">Encara no hi ha despeses.</div>';
-
-  const bdiv = document.getElementById("balances");
-  bdiv.innerHTML = state.people.map(p => {
-    const v = bal[p] || 0;
-    const cls = v > 0.005 ? "pos" : (v < -0.005 ? "neg" : "");
-    const txt = v > 0.005 ? `+${eur(v)} (li deuen)` : (v < -0.005 ? `${eur(v)} (ha de pagar)` : "0 €");
-    return `<div class="balance-row">
-      <span>${esc(p)}<div class="small">Pagat ${eur(paid[p]||0)} · Li toca ${eur(owed[p]||0)}</div></span>
-      <span class="${cls}">${txt}</span></div>`;
-  }).join("");
 
   // saldar (greedy)
   const creditors = [], debtors = [];
