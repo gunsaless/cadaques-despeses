@@ -141,6 +141,11 @@
   .settle { padding: 10px 12px; background: var(--green-light); border-radius: 8px; margin-bottom: 8px; font-size: .92rem; }
   .settle b { color: var(--green-dark); }
   .empty { color: var(--muted); font-style: italic; text-align: center; padding: 20px; }
+  .pp-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .pp-name { font-weight: 700; margin-bottom: 6px; }
+  .pp-line { font-size: .9rem; padding: 3px 0; }
+  .pp-pay b { color: var(--red); }
+  .pp-get b { color: var(--green-dark); }
   .meal-checks { display: flex; flex-wrap: wrap; gap: 6px; }
   .meal-checks .mc {
     font-size: .78rem; padding: 5px 9px; border: 1px solid var(--border);
@@ -241,6 +246,11 @@
       <h2>Com saldar els comptes</h2>
       <p class="small">Pagaments mínims perquè tothom quedi en paus.</p>
       <div id="settlements"></div>
+    </div>
+    <div class="card">
+      <h2>Resum per persona</h2>
+      <p class="small">Què ha de pagar i a qui, i qui li ha de pagar a ell/a.</p>
+      <div id="perPerson"></div>
     </div>
   </section>
 </main>
@@ -632,6 +642,22 @@ function renderComptes() {
   sdiv.innerHTML = tx.length
     ? tx.map(t => `<div class="settle"><b>${esc(t.from)}</b> paga <b>${eur(t.amt)}</b> a <b>${esc(t.to)}</b></div>`).join("")
     : '<div class="empty">Tot quadrat! No hi ha res a pagar.</div>';
+
+  // Resum per persona (agrupant les transaccions)
+  const pdiv = document.getElementById("perPerson");
+  if (!tx.length) {
+    pdiv.innerHTML = '<div class="empty">Tot quadrat! No hi ha res a pagar.</div>';
+  } else {
+    const involved = state.people.filter(p => tx.some(t => t.from === p || t.to === p));
+    pdiv.innerHTML = involved.map(p => {
+      const pays = tx.filter(t => t.from === p);
+      const gets = tx.filter(t => t.to === p);
+      let lines = "";
+      pays.forEach(t => lines += `<div class="pp-line pp-pay">➡️ Has de pagar <b>${eur(t.amt)}</b> a <b>${esc(t.to)}</b></div>`);
+      gets.forEach(t => lines += `<div class="pp-line pp-get">⬅️ <b>${esc(t.from)}</b> t'ha de pagar <b>${eur(t.amt)}</b></div>`);
+      return `<div class="pp-card"><div class="pp-name">${esc(p)}</div>${lines}</div>`;
+    }).join("");
+  }
 }
 
 // ---------- Utils ----------
