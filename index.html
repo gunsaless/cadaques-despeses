@@ -61,6 +61,13 @@
     font-size: 1.1rem; line-height: 1;
   }
   #themeToggle:hover { background: rgba(255,255,255,.28); }
+  #eventBar { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  #eventBar select { max-width: 60%; padding: 7px 9px; border-radius: 8px; border: none; font-weight: 600; }
+  #eventBar button { padding: 7px 11px; font-size: .85rem; }
+  #eventBar button.ghost { color: #fff; border-color: rgba(255,255,255,.4); background: transparent; }
+  #eventBar button.ghost:hover { background: rgba(255,255,255,.2); }
+  .modal h2 { margin-bottom: 14px; }
+  .modal.wide, #newEventOverlay .modal { max-width: 420px; }
   header h1 { margin: 0; font-size: 1.4rem; letter-spacing: .5px; }
   header p { margin: 4px 0 0; opacity: .85; font-size: .85rem; }
   .tabs {
@@ -230,8 +237,13 @@
 <body>
 <header>
   <button id="themeToggle" title="Mode nit / dia">🌙</button>
-  <h1>🏖️ Despeses Cadaqués 2026</h1>
+  <h1 id="eventTitle">🏖️ Despeses</h1>
   <p>Reparteix les despeses segons qui hi és a cada àpat</p>
+  <div id="eventBar">
+    <select id="eventSelect" title="Esdeveniment"></select>
+    <button id="btnNewEvent" title="Nou esdeveniment">＋ Nou</button>
+    <button id="btnDeleteEvent" class="ghost" title="Esborrar esdeveniment">🗑️</button>
+  </div>
   <p id="syncBadge" style="margin-top:6px;font-size:.78rem;font-weight:600">…</p>
 </header>
 
@@ -255,7 +267,7 @@
 
     <div class="card">
       <h2>Qui hi és a cada àpat</h2>
-      <p class="small">Marca les caselles dels àpats que fa cada persona a Cadaqués. Aquesta taula determina com es reparteixen les despeses. Amb 🍽️ pots marcar els àpats fets al restaurant: quedaran fora del repartiment de la compra general (la factura s'afegeix com a despesa a part). Nota: a l'hora de repartir, un esmorzar compta la meitat que un dinar o un sopar.</p>
+      <p class="small">Marca les caselles dels àpats que fa cada persona. Aquesta taula determina com es reparteixen les despeses. Amb 🍽️ pots marcar els àpats fets al restaurant: quedaran fora del repartiment de la compra general (la factura s'afegeix com a despesa a part). Nota: a l'hora de repartir, un esmorzar compta la meitat que un dinar o un sopar.</p>
       <div class="grid-wrap">
         <table class="att" id="attTable"></table>
       </div>
@@ -342,6 +354,43 @@
   </div>
 </div>
 
+<!-- Modal: nou esdeveniment -->
+<div id="newEventOverlay" class="overlay">
+  <div class="modal">
+    <h2 style="margin-top:0">Nou esdeveniment</h2>
+    <div class="field">
+      <label>Nom</label>
+      <input type="text" id="neName" placeholder="Ex: Cap de setmana a la Cerdanya" style="width:100%">
+    </div>
+    <div class="row">
+      <div class="field" style="flex:1;min-width:130px">
+        <label>Data inici</label>
+        <input type="date" id="neStart" style="width:100%">
+      </div>
+      <div class="field" style="flex:1;min-width:130px">
+        <label>Data fi</label>
+        <input type="date" id="neEnd" style="width:100%">
+      </div>
+    </div>
+    <div class="field">
+      <label>Àpats de cada dia</label>
+      <div class="meal-checks" id="neTypes">
+        <span class="mc on" data-type="Esmorzar">Esmorzar</span>
+        <span class="mc on" data-type="Dinar">Dinar</span>
+        <span class="mc on" data-type="Sopar">Sopar</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Persones (separades per comes, opcional)</label>
+      <input type="text" id="nePeople" placeholder="Ex: Adri, Jordi, Júlia" style="width:100%">
+    </div>
+    <div class="modal-btns">
+      <button class="ghost" id="neCancel">Cancel·lar</button>
+      <button id="neCreate">Crear</button>
+    </div>
+  </div>
+</div>
+
 <!-- Firebase (sincronització entre dispositius) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -397,29 +446,52 @@ const DEFAULT = (() => {
   const attendance = {};
   people.forEach(p => attendance[p] = a[p].map(x => !!x));
   const restaurants = meals.map(() => false);
-  return { people, meals, attendance, restaurants, expenses: [], settlements: [] };
+  return { name: "Cadaqués 2026", people, meals, attendance, restaurants, expenses: [], settlements: [] };
 })();
 
-let state = normalize(load());
+// ---------- Multi-esdeveniment ----------
+const LEGACY_ID = "cadaques2026"; // esdeveniment per defecte (dades existents)
+let currentEventId = "";
+let eventsIndex = {}; // id -> { name }
+let state;
 
-function load() {
-  try {
-    const raw = localStorage.getItem("cadaques2026");
-    if (raw) return JSON.parse(raw);
-  } catch(e) {}
-  return structuredClone(DEFAULT);
+function eventKey(id) { return "cad-event-" + id; }
+
+function loadLocalEvent(id) {
+  try { const r = localStorage.getItem(eventKey(id)); if (r) return normalize(JSON.parse(r)); } catch(e) {}
+  if (id === LEGACY_ID) {
+    try { const old = localStorage.getItem("cadaques2026"); if (old) return normalize(JSON.parse(old)); } catch(e) {}
+    return normalize(structuredClone(DEFAULT));
+  }
+  return null;
 }
+
+function initEventSelection() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  try { eventsIndex = JSON.parse(localStorage.getItem("cad-index") || "{}"); } catch(e) { eventsIndex = {}; }
+  currentEventId = params.get("event") || localStorage.getItem("cad-current") || LEGACY_ID;
+  state = loadLocalEvent(currentEventId) || normalize(structuredClone(DEFAULT));
+  if (!eventsIndex[currentEventId]) eventsIndex[currentEventId] = { name: state.name || currentEventId };
+}
+
 // Garanteix que l'estat tingui tots els camps (migració de versions antigues)
 function normalize(s) {
+  if (!Array.isArray(s.meals)) s.meals = [];
+  if (!s.name) s.name = "Esdeveniment";
+  if (!s.people) s.people = [];
+  if (!s.attendance) s.attendance = {};
+  if (!Array.isArray(s.expenses)) s.expenses = [];
+  if (!Array.isArray(s.settlements)) s.settlements = [];
   if (!s.restaurants || s.restaurants.length !== s.meals.length) {
     s.restaurants = s.meals.map((_, i) => !!(s.restaurants && s.restaurants[i]));
   }
-  if (!Array.isArray(s.settlements)) s.settlements = [];
   return s;
 }
 function save() {
-  localStorage.setItem("cadaques2026", JSON.stringify(state));
-  if (useCloud) pushExpensesAndPeople();
+  localStorage.setItem(eventKey(currentEventId), JSON.stringify(state));
+  localStorage.setItem("cad-current", currentEventId);
+  localStorage.setItem("cad-index", JSON.stringify(eventsIndex));
+  if (useCloud) pushEventFull();
 }
 
 function uid() { return Math.random().toString(36).slice(2,10); }
@@ -444,7 +516,8 @@ function askConfirm(message) {
 }
 
 // ====================== SINCRONITZACIÓ (Firebase) ======================
-let db = null, cloudRoot = null, useCloud = false, applyingRemote = false, roomId = "";
+let db = null, cloudRoot = null, useCloud = false, applyingRemote = false;
+let eventValueCb = null;
 
 function slug(s) { return String(s).replace(/[.#$\[\]\/]/g, "_"); }
 
@@ -456,6 +529,7 @@ function setSyncBadge(text, ok) {
 function initCloud() {
   if (!FIREBASE_CONFIG || !FIREBASE_CONFIG.databaseURL) {
     setSyncBadge("💾 Només en aquest dispositiu", false);
+    renderEventPicker();
     return false;
   }
   try {
@@ -463,17 +537,36 @@ function initCloud() {
     db = firebase.database();
   } catch (e) {
     setSyncBadge("⚠️ Error de connexió — mode local", false);
+    renderEventPicker();
     return false;
   }
-  const params = new URLSearchParams(location.hash.slice(1));
-  roomId = params.get("room") || "cadaques2026";
-  cloudRoot = db.ref("cadaques/" + roomId);
   useCloud = true;
+  // Índex d'esdeveniments (per al selector)
+  db.ref("cadaques/_index").on("value", (snap) => {
+    eventsIndex = snap.val() || {};
+    if (!eventsIndex[currentEventId]) {
+      eventsIndex[currentEventId] = { name: state.name || currentEventId };
+      db.ref("cadaques/_index/" + currentEventId).set(eventsIndex[currentEventId]);
+    }
+    localStorage.setItem("cad-index", JSON.stringify(eventsIndex));
+    renderEventPicker();
+  });
+  subscribeEvent(currentEventId);
+  return true;
+}
 
-  cloudRoot.on("value", (snap) => {
+function subscribeEvent(id) {
+  if (cloudRoot && eventValueCb) cloudRoot.off("value", eventValueCb);
+  currentEventId = id;
+  cloudRoot = db.ref("cadaques/" + id);
+  eventValueCb = cloudRoot.on("value", (snap) => {
     const v = snap.val();
     if (!v || !v.people) { seedCloud(); return; }
     applyingRemote = true;
+    state.name = v.name || eventsIndex[id]?.name || state.name;
+    state.meals = Array.isArray(v.meals) ? v.meals : (id === LEGACY_ID ? structuredClone(DEFAULT.meals) : []);
+    if (!v.meals && id === LEGACY_ID) cloudRoot.child("meals").set(state.meals); // migració
+    if (!v.name) cloudRoot.child("name").set(state.name);
     state.people = v.people;
     state.attendance = {};
     state.people.forEach(p => {
@@ -483,43 +576,32 @@ function initCloud() {
     state.restaurants = state.meals.map((_, i) => !!(v.restaurants && v.restaurants[i]));
     state.expenses = v.expenses ? Object.values(v.expenses) : [];
     state.settlements = v.settlements ? Object.values(v.settlements) : [];
-    localStorage.setItem("cadaques2026", JSON.stringify(state));
-    renderAll();
-    if (document.querySelector('.tab[data-tab="comptes"]').classList.contains("active")) renderComptes();
+    localStorage.setItem(eventKey(id), JSON.stringify(state));
+    applyEventToUI();
     setSyncBadge("🟢 Sincronitzat", true);
     applyingRemote = false;
   }, () => setSyncBadge("⚠️ Sense accés (revisa les regles)", false));
-
-  return true;
 }
 
-function seedCloud() {
+// Escriu tot un esdeveniment (creació o canvi gros)
+function eventToCloudObj() {
   const att = {};
-  DEFAULT.people.forEach(p => { att[slug(p)] = DEFAULT.attendance[p].map(b => !!b); });
-  const exp = {};
-  state.expenses.forEach(e => exp[e.id] = e);
-  const set = {};
-  state.settlements.forEach(s => set[s.id] = s);
-  cloudRoot.set({ people: DEFAULT.people, attendance: att, expenses: exp, restaurants: DEFAULT.restaurants, settlements: set });
+  state.people.forEach(p => { att[slug(p)] = (state.attendance[p] || state.meals.map(()=>false)).map(b => !!b); });
+  const exp = {}; state.expenses.forEach(e => exp[e.id] = e);
+  const set = {}; state.settlements.forEach(s => set[s.id] = s);
+  return { name: state.name, meals: state.meals, people: state.people, attendance: att, restaurants: state.restaurants, expenses: exp, settlements: set };
+}
+function seedCloud() { cloudRoot.set(eventToCloudObj()); }
+function pushEventFull() {
+  if (!useCloud || applyingRemote) return;
+  cloudRoot.update(eventToCloudObj());
 }
 
 function cloudSetRestaurant(idx, val) {
   if (useCloud && !applyingRemote) cloudRoot.child("restaurants/" + idx).set(val);
 }
-
-// Escriptures granulars (no es trepitgen entre dispositius)
 function cloudSetAttendance(p, idx, val) {
   if (useCloud && !applyingRemote) cloudRoot.child("attendance/" + slug(p) + "/" + idx).set(val);
-}
-function pushExpensesAndPeople() {
-  if (!useCloud || applyingRemote) return;
-  const exp = {};
-  state.expenses.forEach(e => exp[e.id] = e);
-  cloudRoot.child("expenses").set(exp);
-  cloudRoot.child("people").set(state.people);
-  const set = {};
-  state.settlements.forEach(s => set[s.id] = s);
-  cloudRoot.child("settlements").set(set);
 }
 function cloudInitPersonAttendance(p) {
   if (useCloud && !applyingRemote) cloudRoot.child("attendance/" + slug(p)).set(state.meals.map(() => false));
@@ -1001,6 +1083,112 @@ function renderAll() {
   renderExpenses();
 }
 
+// ---------- Esdeveniments ----------
+function applyEventToUI() {
+  document.getElementById("eventTitle").textContent = "🏖️ " + (state.name || "Despeses");
+  document.title = (state.name || "Despeses") + " — Despeses";
+  renderEventPicker();
+  renderAll();
+  if (document.querySelector('.tab[data-tab="comptes"]').classList.contains("active")) renderComptes();
+}
+
+function renderEventPicker() {
+  const sel = document.getElementById("eventSelect");
+  if (!sel) return;
+  const ids = Object.keys(eventsIndex);
+  if (!ids.includes(currentEventId)) ids.push(currentEventId);
+  sel.innerHTML = ids.map(id =>
+    `<option value="${escAttr(id)}" ${id===currentEventId?'selected':''}>${esc((eventsIndex[id] && eventsIndex[id].name) || state.name || id)}</option>`
+  ).join("");
+}
+
+function switchEvent(id) {
+  if (id === currentEventId) return;
+  save(); // desa l'esdeveniment actual
+  currentEventId = id;
+  localStorage.setItem("cad-current", id);
+  state = loadLocalEvent(id) || normalize(structuredClone(DEFAULT));
+  if (useCloud) subscribeEvent(id);   // el listener actualitzarà l'estat i la UI
+  applyEventToUI();
+}
+
+const CAT_DAYS = ["Diumenge","Dilluns","Dimarts","Dimecres","Dijous","Divendres","Dissabte"];
+function catalanDay(d) { return CAT_DAYS[d.getDay()] + " " + d.getDate(); }
+function generateMeals(start, end, types) {
+  const meals = [];
+  const cur = new Date(start + "T00:00:00");
+  const last = new Date(end + "T00:00:00");
+  if (isNaN(cur) || isNaN(last) || cur > last) return meals;
+  let guard = 0;
+  while (cur <= last && guard++ < 400) {
+    const label = catalanDay(cur);
+    types.forEach(t => meals.push({ day: label, type: t }));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return meals;
+}
+
+function openNewEvent() {
+  document.getElementById("neName").value = "";
+  document.getElementById("neStart").value = "";
+  document.getElementById("neEnd").value = "";
+  document.getElementById("nePeople").value = "";
+  document.querySelectorAll("#neTypes .mc").forEach(m => m.classList.add("on"));
+  document.getElementById("newEventOverlay").classList.add("show");
+}
+
+function doCreateEvent() {
+  const name = document.getElementById("neName").value.trim();
+  const start = document.getElementById("neStart").value;
+  const end = document.getElementById("neEnd").value;
+  const types = [...document.querySelectorAll("#neTypes .mc.on")].map(m => m.dataset.type);
+  if (!name) { alert("Posa un nom a l'esdeveniment."); return; }
+  if (!start || !end) { alert("Indica les dates d'inici i fi."); return; }
+  if (types.length === 0) { alert("Tria almenys un tipus d'àpat."); return; }
+  const meals = generateMeals(start, end, types);
+  if (meals.length === 0) { alert("Les dates no són vàlides (fi abans d'inici?)."); return; }
+  const people = document.getElementById("nePeople").value.split(",").map(s => s.trim()).filter(Boolean);
+  const id = slug(name).toLowerCase().replace(/\s+/g, "-").slice(0, 30) + "-" + uid();
+  const attendance = {};
+  people.forEach(p => attendance[p] = meals.map(() => false));
+  const newState = normalize({ name, meals, people, attendance, restaurants: meals.map(()=>false), expenses: [], settlements: [] });
+
+  // Desa l'actual, registra el nou i canvia-hi
+  save();
+  eventsIndex[id] = { name };
+  localStorage.setItem("cad-index", JSON.stringify(eventsIndex));
+  currentEventId = id;
+  localStorage.setItem("cad-current", id);
+  state = newState;
+  localStorage.setItem(eventKey(id), JSON.stringify(state));
+  if (useCloud) {
+    db.ref("cadaques/_index/" + id).set({ name });
+    if (cloudRoot && eventValueCb) cloudRoot.off("value", eventValueCb);
+    cloudRoot = db.ref("cadaques/" + id);
+    cloudRoot.set(eventToCloudObj());
+    subscribeEvent(id);
+  }
+  document.getElementById("newEventOverlay").classList.remove("show");
+  applyEventToUI();
+}
+
+async function deleteCurrentEvent() {
+  const ids = Object.keys(eventsIndex);
+  if (ids.length <= 1) { alert("No pots esborrar l'únic esdeveniment."); return; }
+  if (!await askConfirm(`Esborrar l'esdeveniment "${state.name}" i totes les seves dades? No es pot desfer.`)) return;
+  const delId = currentEventId;
+  delete eventsIndex[delId];
+  localStorage.removeItem(eventKey(delId));
+  if (useCloud) {
+    db.ref("cadaques/_index/" + delId).remove();
+    db.ref("cadaques/" + delId).remove();
+  }
+  const nextId = Object.keys(eventsIndex)[0];
+  localStorage.setItem("cad-index", JSON.stringify(eventsIndex));
+  currentEventId = "";       // força el switch
+  switchEvent(nextId);
+}
+
 // ---------- Listeners (event delegation) ----------
 document.getElementById("btnAddPerson").addEventListener("click", addPerson);
 document.getElementById("newPerson").addEventListener("keydown", e => { if (e.key === "Enter") addPerson(); });
@@ -1039,6 +1227,15 @@ document.getElementById("settlements").addEventListener("click", e => {
   const up = e.target.closest(".undo-paid");
   if (up) { undoPaid(up.dataset.id); return; }
 });
+
+// Esdeveniments
+document.getElementById("eventSelect").addEventListener("change", e => switchEvent(e.target.value));
+document.getElementById("btnNewEvent").addEventListener("click", openNewEvent);
+document.getElementById("btnDeleteEvent").addEventListener("click", deleteCurrentEvent);
+document.getElementById("neCreate").addEventListener("click", doCreateEvent);
+document.getElementById("neCancel").addEventListener("click", () => document.getElementById("newEventOverlay").classList.remove("show"));
+document.getElementById("newEventOverlay").addEventListener("click", e => { if (e.target.id === "newEventOverlay") e.currentTarget.classList.remove("show"); });
+document.getElementById("neTypes").addEventListener("click", e => { const m = e.target.closest(".mc"); if (m) m.classList.toggle("on"); });
 // Mostrar/amagar selecció d'àpats dins l'edició inline
 document.getElementById("expenseList").addEventListener("change", e => {
   const sc = e.target.closest(".ed-scope");
@@ -1067,7 +1264,8 @@ document.getElementById("themeToggle").addEventListener("click", () => {
   try { localStorage.setItem("cadaques-theme", dark ? "dark" : "light"); } catch(e) {}
 });
 
-renderAll();
+initEventSelection();
+applyEventToUI();
 onScopeChange();
 initCloud(); // si hi ha config de Firebase, sincronitza; si no, mode local
 </script>
