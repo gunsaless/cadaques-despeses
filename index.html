@@ -118,6 +118,22 @@
     position: absolute; left: 50%; top: 50%; transform: translate(-50%,-52%);
   }
   td.present { background: var(--green-light); }
+  .rchk {
+    width: 24px; height: 24px;
+    border: 2px solid #d8a24a;
+    border-radius: 50%;
+    display: inline-block;
+    cursor: pointer;
+    vertical-align: middle;
+    touch-action: manipulation;
+  }
+  .rchk.on { background: #e8932b; border-color: #e8932b; position: relative; }
+  .rchk.on::after {
+    content: "🍽️"; font-size: 12px;
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-52%);
+  }
+  table.att td.restlabel { background: #fdf3e3; color: #8a5a12; font-weight: 600; }
+  table.att th.meal.is-rest { background: #f6d79a; color: #7a4e0c; }
   .expense {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -200,7 +216,7 @@
 
     <div class="card">
       <h2>Qui hi és a cada àpat</h2>
-      <p class="small">Marca les caselles dels àpats que fa cada persona a Cadaqués. Aquesta taula determina com es reparteixen les despeses.</p>
+      <p class="small">Marca les caselles dels àpats que fa cada persona a Cadaqués. Aquesta taula determina com es reparteixen les despeses. Amb 🍽️ pots marcar els àpats fets al restaurant: quedaran fora del repartiment de la compra general (la factura s'afegeix com a despesa a part).</p>
       <div class="grid-wrap">
         <table class="att" id="attTable"></table>
       </div>
@@ -250,6 +266,11 @@
     <div class="card">
       <h2>Resum</h2>
       <div id="summaryTop"></div>
+    </div>
+    <div class="card">
+      <h2>Cost per franja</h2>
+      <p class="small">Aproximació de quant s'ha gastat en cada tipus d'àpat.</p>
+      <div id="byCategory"></div>
     </div>
     <div class="card">
       <h2>Balanç per persona</h2>
@@ -334,10 +355,11 @@ const DEFAULT = (() => {
   };
   const attendance = {};
   people.forEach(p => attendance[p] = a[p].map(x => !!x));
-  return { people, meals, attendance, expenses: [] };
+  const restaurants = meals.map(() => false);
+  return { people, meals, attendance, restaurants, expenses: [] };
 })();
 
-let state = load();
+let state = normalize(load());
 
 function load() {
   try {
@@ -345,6 +367,13 @@ function load() {
     if (raw) return JSON.parse(raw);
   } catch(e) {}
   return structuredClone(DEFAULT);
+}
+// Garanteix que l'estat tingui tots els camps (migració de versions antigues)
+function normalize(s) {
+  if (!s.restaurants || s.restaurants.length !== s.meals.length) {
+    s.restaurants = s.meals.map((_, i) => !!(s.restaurants && s.restaurants[i]));
+  }
+  return s;
 }
 function save() {
   localStorage.setItem("cadaques2026", JSON.stringify(state));
@@ -409,6 +438,7 @@ function initCloud() {
       const arr = (v.attendance && v.attendance[slug(p)]) || {};
       state.attendance[p] = state.meals.map((_, i) => !!arr[i]);
     });
+    state.restaurants = state.meals.map((_, i) => !!(v.restaurants && v.restaurants[i]));
     state.expenses = v.expenses ? Object.values(v.expenses) : [];
     localStorage.setItem("cadaques2026", JSON.stringify(state));
     renderAll();
@@ -425,7 +455,11 @@ function seedCloud() {
   DEFAULT.people.forEach(p => { att[slug(p)] = DEFAULT.attendance[p].map(b => !!b); });
   const exp = {};
   state.expenses.forEach(e => exp[e.id] = e);
-  cloudRoot.set({ people: DEFAULT.people, attendance: att, expenses: exp });
+  cloudRoot.set({ people: DEFAULT.people, attendance: att, expenses: exp, restaurants: DEFAULT.restaurants });
+}
+
+function cloudSetRestaurant(idx, val) {
+  if (useCloud && !applyingRemote) cloudRoot.child("restaurants/" + idx).set(val);
 }
 
 // Escriptures granulars (no es trepitgen entre dispositius)
@@ -473,8 +507,16 @@ function renderAttendance() {
   }
   dayRow += '<th class="total" rowspan="2">Àpats</th></tr>';
   let mealRow = '<tr>';
-  m.forEach(mm => mealRow += `<th class="meal">${mm.type}</th>`);
+  m.forEach((mm, idx) => mealRow += `<th class="meal${state.restaurants[idx]?' is-rest':''}">${mm.type}${state.restaurants[idx]?' 🍽️':''}</th>`);
   mealRow += '</tr>';
+
+  // Fila per marcar àpats al restaurant (exclosos del repartiment general)
+  let restRow = '<tr><td class="name restlabel">🍽️ Al restaurant?</td>';
+  m.forEach((mm, idx) => {
+    const on = state.restaurants[idx];
+    restRow += `<td class="${on?'present':''}"><span class="rchk ${on?'on':''}" data-ri="${idx}" title="Marca si aquest àpat es fa al restaurant"></span></td>`;
+  });
+  restRow += '<td class="total"></td></tr>';
 
   let body = '';
   state.people.forEach((p, pi) => {
@@ -496,11 +538,23 @@ function renderAttendance() {
   });
   totRow += '<td class="total"></td></tr>';
 
-  t.innerHTML = dayRow + mealRow + body + totRow;
+  t.innerHTML = dayRow + mealRow + restRow + body + totRow;
 }
 
 // Event delegation: un sol listener per a tota la taula
 document.getElementById("attTable").addEventListener("click", (ev) => {
+  const rcell = ev.target.closest(".rchk");
+  if (rcell) {
+    const ri = parseInt(rcell.dataset.ri);
+    if (isNaN(ri)) return;
+    const val = !state.restaurants[ri];
+    state.restaurants[ri] = val;
+    localStorage.setItem("cadaques2026", JSON.stringify(state));
+    cloudSetRestaurant(ri, val);
+    renderAttendance();
+    renderMealChecks();
+    return;
+  }
   const cell = ev.target.closest(".chk");
   if (!cell) return;
   const p = state.people[parseInt(cell.dataset.pi)];
@@ -550,7 +604,7 @@ function onScopeChange() {
 function renderMealChecks() {
   const c = document.getElementById("expMealChecks");
   c.innerHTML = state.meals.map((mm, idx) =>
-    `<span class="mc" data-idx="${idx}">${esc(mm.day)} · ${esc(mm.type)}</span>`
+    `<span class="mc" data-idx="${idx}">${esc(mm.day)} · ${esc(mm.type)}${state.restaurants[idx]?' 🍽️':''}</span>`
   ).join("");
 }
 function addExpense() {
@@ -584,7 +638,10 @@ async function removeExpense(id) {
 // Model: cada parella (àpat × persona present) és una "unitat".
 // cost per unitat = import / total unitats. Cada persona deu cost·(nº àpats coberts on hi és).
 function splitExpense(e) {
-  const mealIdxs = e.scope === "all" ? state.meals.map((_,i)=>i) : e.meals;
+  // "Tot el viatge" reparteix només entre àpats NO de restaurant (els de restaurant es paguen a part).
+  const mealIdxs = e.scope === "all"
+    ? state.meals.map((_,i)=>i).filter(i => !state.restaurants[i])
+    : e.meals;
   const shares = {}; // persona -> import que li toca
   let totalUnits = 0;
   const unitsPer = {};
@@ -657,6 +714,31 @@ function renderComptes() {
   document.getElementById("summaryTop").innerHTML = `
     <div class="balance-row"><span>Despesa total</span><span class="amount">${eur(total)}</span></div>
     <div class="balance-row"><span>Nombre de despeses</span><span>${state.expenses.length}</span></div>`;
+
+  // Cost per franja: reparteix cada despesa entre els àpats que cobreix
+  const cat = {};
+  let unassigned = 0;
+  state.expenses.forEach(e => {
+    const idxs = e.scope === "all"
+      ? state.meals.map((_,i)=>i).filter(i => !state.restaurants[i])
+      : (e.meals || []);
+    const { perUnit, totalUnits } = splitExpense(e);
+    if (totalUnits === 0) { unassigned += e.amount; return; }
+    idxs.forEach(idx => {
+      let att = 0;
+      state.people.forEach(p => { if (state.attendance[p] && state.attendance[p][idx]) att++; });
+      const portion = perUnit * att;
+      const key = state.restaurants[idx] ? "🍽️ Restaurant" : (state.meals[idx] ? state.meals[idx].type : "?");
+      cat[key] = (cat[key] || 0) + portion;
+    });
+  });
+  if (unassigned > 0.005) cat["Sense assignar"] = (cat["Sense assignar"] || 0) + unassigned;
+  const catEntries = Object.entries(cat).sort((a,b) => b[1] - a[1]);
+  const cdiv = document.getElementById("byCategory");
+  cdiv.innerHTML = catEntries.length
+    ? catEntries.map(([k,v]) =>
+        `<div class="balance-row"><span>${esc(k)}</span><span class="amount">${eur(v)}</span></div>`).join("")
+    : '<div class="empty">Encara no hi ha despeses.</div>';
 
   const bdiv = document.getElementById("balances");
   bdiv.innerHTML = state.people.map(p => {
