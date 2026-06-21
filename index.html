@@ -20,6 +20,7 @@
     --rest-text: #8a5a12;
     --rest-head: #f6d79a;
     --rest-head-text: #7a4e0c;
+    --accent: #2f7350; /* text d'accent verd (llegible sobre fons clar) */
   }
   body.dark {
     --green: #58b083;
@@ -36,6 +37,7 @@
     --rest-text: #e8c486;
     --rest-head: #4a3a1c;
     --rest-head-text: #f0d49a;
+    --accent: #7fc8a0; /* verd clar, llegible sobre fons fosc */
   }
   * { box-sizing: border-box; }
   body {
@@ -80,7 +82,7 @@
     border-bottom: 3px solid transparent;
     user-select: none;
   }
-  .tab.active { color: var(--green-dark); border-bottom-color: var(--green); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--green); }
   main { max-width: 960px; margin: 0 auto; padding: 18px 14px 60px; }
   .panel { display: none; }
   .panel.active { display: block; }
@@ -114,7 +116,7 @@
     padding: 9px 10px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: #fff;
+    background: var(--card);
     color: var(--text);
     max-width: 100%;
   }
@@ -127,7 +129,7 @@
   table.att th, table.att td { border: 1px solid var(--border); padding: 6px 9px; text-align: center; white-space: nowrap; }
   table.att td:has(.chk) { padding: 7px 11px; }
   table.att th.day { background: var(--green-dark); color: #fff; }
-  table.att th.meal { background: var(--green-light); color: var(--green-dark); font-weight: 600; }
+  table.att th.meal { background: var(--green-light); color: var(--accent); font-weight: 600; }
   table.att td.name, table.att th.name { text-align: left; font-weight: 600; position: sticky; left: 0; background: var(--card); z-index: 2; }
   table.att th.name { background: var(--green-dark); color:#fff; }
   table.att td.total, table.att th.total { font-weight: 700; background: var(--bg); }
@@ -173,7 +175,7 @@
   .expense .desc { font-weight: 700; }
   .expense .meta { font-size: .82rem; color: var(--muted); margin-top: 2px; }
   .amount { font-weight: 700; font-size: 1.05rem; white-space: nowrap; }
-  .tag { display: inline-block; font-size: .72rem; background: var(--green-light); color: var(--green-dark); padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+  .tag { display: inline-block; font-size: .72rem; background: var(--green-light); color: var(--accent); padding: 2px 8px; border-radius: 20px; font-weight: 600; }
   .breakdown { margin-top: 8px; font-size: .82rem; color: var(--muted); display: none; }
   .breakdown.show { display: block; }
   .breakdown table { width: 100%; border-collapse: collapse; }
@@ -181,16 +183,16 @@
   .breakdown td:last-child { text-align: right; }
   .balance-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
   .balance-row:last-child { border-bottom: none; }
-  .pos { color: var(--green-dark); font-weight: 700; }
+  .pos { color: var(--accent); font-weight: 700; }
   .neg { color: var(--red); font-weight: 700; }
   .settle { padding: 10px 12px; background: var(--green-light); border-radius: 8px; margin-bottom: 8px; font-size: .92rem; }
-  .settle b { color: var(--green-dark); }
+  .settle b { color: var(--accent); }
   .empty { color: var(--muted); font-style: italic; text-align: center; padding: 20px; }
   .pp-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
   .pp-name { font-weight: 700; margin-bottom: 6px; }
   .pp-line { font-size: .9rem; padding: 3px 0; }
   .pp-pay b { color: var(--red); }
-  .pp-get b { color: var(--green-dark); }
+  .pp-get b { color: var(--accent); }
   .overlay {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
     z-index: 100; align-items: center; justify-content: center; padding: 20px;
