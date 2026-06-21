@@ -282,11 +282,16 @@
         <select id="expScope" style="width:100%">
           <option value="all">Tot el viatge — entre tothom, segons quants àpats fa cadascú</option>
           <option value="meals">Àpats concrets — només entre els qui hi són en aquells àpats</option>
+          <option value="people">Despesa única — entre persones concretes (sense àpats)</option>
         </select>
       </div>
       <div class="field" id="mealSelectField" style="display:none;">
         <label>Selecciona els àpats</label>
         <div class="meal-checks" id="expMealChecks"></div>
+      </div>
+      <div class="field" id="peopleSelectField" style="display:none;">
+        <label>Selecciona les persones (es divideix a parts iguals)</label>
+        <div class="meal-checks" id="expPeopleChecks"></div>
       </div>
       <div class="row">
         <button id="btnAddExpense">Afegir despesa</button>
@@ -634,11 +639,18 @@ function renderPayerSelect() {
 function onScopeChange() {
   const scope = document.getElementById("expScope").value;
   document.getElementById("mealSelectField").style.display = scope === "meals" ? "block" : "none";
+  document.getElementById("peopleSelectField").style.display = scope === "people" ? "block" : "none";
 }
 function renderMealChecks() {
   const c = document.getElementById("expMealChecks");
   c.innerHTML = state.meals.map((mm, idx) =>
     `<span class="mc" data-idx="${idx}">${esc(mm.day)} · ${esc(mm.type)}${state.restaurants[idx]?' 🍽️':''}</span>`
+  ).join("");
+}
+function renderPeopleChecks() {
+  const c = document.getElementById("expPeopleChecks");
+  c.innerHTML = state.people.map(p =>
+    `<span class="mc" data-person="${escAttr(p)}">${esc(p)}</span>`
   ).join("");
 }
 let editingId = null;
@@ -649,17 +661,22 @@ function addExpense() {
   const payer = document.getElementById("expPayer").value;
   const scope = document.getElementById("expScope").value;
   if (!desc || !(amount > 0) || !payer) { alert("Omple concepte, import i qui ha pagat."); return; }
-  let meals = [];
+  let meals = [], people = [];
   if (scope === "meals") {
     meals = [...document.querySelectorAll("#expMealChecks .mc.on")].map(e => parseInt(e.dataset.idx));
     if (meals.length === 0) { alert("Selecciona almenys un àpat."); return; }
   }
-  state.expenses.push({ id: uid(), desc, amount, payer, scope, meals });
+  if (scope === "people") {
+    people = [...document.querySelectorAll("#expPeopleChecks .mc.on")].map(e => e.dataset.person);
+    if (people.length === 0) { alert("Selecciona almenys una persona."); return; }
+  }
+  state.expenses.push({ id: uid(), desc, amount, payer, scope, meals, people });
   document.getElementById("expDesc").value = "";
   document.getElementById("expAmount").value = "";
   document.getElementById("expScope").value = "all";
   onScopeChange();
   renderMealChecks();
+  renderPeopleChecks();
   save(); renderExpenses();
 }
 
@@ -681,13 +698,17 @@ async function saveEditExpense(card) {
   const payer = card.querySelector(".ed-payer").value;
   const scope = card.querySelector(".ed-scope").value;
   if (!desc || !(amount > 0) || !payer) { alert("Omple concepte, import i qui ha pagat."); return; }
-  let meals = [];
+  let meals = [], people = [];
   if (scope === "meals") {
     meals = [...card.querySelectorAll(".ed-mealchecks .mc.on")].map(el => parseInt(el.dataset.idx));
     if (meals.length === 0) { alert("Selecciona almenys un àpat."); return; }
   }
+  if (scope === "people") {
+    people = [...card.querySelectorAll(".ed-peoplechecks .mc.on")].map(el => el.dataset.person);
+    if (people.length === 0) { alert("Selecciona almenys una persona."); return; }
+  }
   if (!await askConfirm(`Desar els canvis de "${desc}"?`)) return;
-  e.desc = desc; e.amount = amount; e.payer = payer; e.scope = scope; e.meals = meals;
+  e.desc = desc; e.amount = amount; e.payer = payer; e.scope = scope; e.meals = meals; e.people = people;
   editingId = null;
   save(); renderExpenses();
 }
@@ -709,6 +730,15 @@ function mealWeight(idx) {
 }
 
 function splitExpense(e) {
+  // Despesa única: a parts iguals entre les persones seleccionades (sense àpats).
+  if (e.scope === "people") {
+    const list = (e.people || []).filter(p => state.people.includes(p));
+    const shares = {};
+    if (list.length === 0) return { shares, totalUnits: 0, perUnit: 0 };
+    const per = e.amount / list.length;
+    list.forEach(p => shares[p] = per);
+    return { shares, totalUnits: list.length, perUnit: per };
+  }
   // "Tot el viatge" reparteix només entre àpats NO de restaurant (els de restaurant es paguen a part).
   const mealIdxs = e.scope === "all"
     ? state.meals.map((_,i)=>i).filter(i => !state.restaurants[i])
@@ -740,7 +770,9 @@ function expenseViewHtml(e) {
   const { shares, totalUnits } = splitExpense(e);
   const scopeLabel = e.scope === "all"
     ? "Tot el viatge"
-    : e.meals.map(i => state.meals[i] ? `${state.meals[i].day} · ${state.meals[i].type}` : "?").join(", ");
+    : e.scope === "people"
+      ? "Entre: " + (e.people || []).join(", ")
+      : e.meals.map(i => state.meals[i] ? `${state.meals[i].day} · ${state.meals[i].type}` : "?").join(", ");
   const valid = totalUnits > 0;
   let rows = state.people
     .filter(p => shares[p])
@@ -775,6 +807,9 @@ function expenseEditHtml(e) {
   const mealChecks = state.meals.map((mm, idx) =>
     `<span class="mc ${(e.meals||[]).includes(idx)?'on':''}" data-idx="${idx}">${esc(mm.day)} · ${esc(mm.type)}${state.restaurants[idx]?' 🍽️':''}</span>`
   ).join("");
+  const peopleChecks = state.people.map(p =>
+    `<span class="mc ${(e.people||[]).includes(p)?'on':''}" data-person="${escAttr(p)}">${esc(p)}</span>`
+  ).join("");
   return `
     <div class="expense" data-edit-id="${e.id}">
       <div class="field">
@@ -796,11 +831,16 @@ function expenseEditHtml(e) {
         <select class="ed-scope" style="width:100%">
           <option value="all" ${e.scope==='all'?'selected':''}>Tot el viatge</option>
           <option value="meals" ${e.scope==='meals'?'selected':''}>Àpats concrets</option>
+          <option value="people" ${e.scope==='people'?'selected':''}>Despesa única (persones)</option>
         </select>
       </div>
       <div class="field ed-mealfield" style="${e.scope==='meals'?'':'display:none'}">
         <label>Selecciona els àpats</label>
         <div class="meal-checks ed-mealchecks">${mealChecks}</div>
+      </div>
+      <div class="field ed-peoplefield" style="${e.scope==='people'?'':'display:none'}">
+        <label>Selecciona les persones (a parts iguals)</label>
+        <div class="meal-checks ed-peoplechecks">${peopleChecks}</div>
       </div>
       <div class="row">
         <button class="ed-save" data-id="${e.id}">Desar canvis</button>
@@ -920,6 +960,7 @@ function renderAll() {
   renderPeople();
   renderPayerSelect();
   renderMealChecks();
+  renderPeopleChecks();
   renderExpenses();
 }
 
@@ -937,6 +978,10 @@ document.getElementById("expMealChecks").addEventListener("click", e => {
   const mc = e.target.closest(".mc");
   if (mc) mc.classList.toggle("on");
 });
+document.getElementById("expPeopleChecks").addEventListener("click", e => {
+  const mc = e.target.closest(".mc");
+  if (mc) mc.classList.toggle("on");
+});
 document.getElementById("expenseList").addEventListener("click", e => {
   const rm = e.target.closest(".rm-expense");
   if (rm) { removeExpense(rm.dataset.id); return; }
@@ -946,7 +991,7 @@ document.getElementById("expenseList").addEventListener("click", e => {
   if (sv) { saveEditExpense(sv.closest(".expense")); return; }
   const cn = e.target.closest(".ed-cancel");
   if (cn) { cancelEdit(); return; }
-  const mc = e.target.closest(".ed-mealchecks .mc");
+  const mc = e.target.closest(".ed-mealchecks .mc, .ed-peoplechecks .mc");
   if (mc) { mc.classList.toggle("on"); return; }
   const tg = e.target.closest(".toggle-bd");
   if (tg) tg.nextElementSibling.classList.toggle("show");
@@ -955,8 +1000,11 @@ document.getElementById("expenseList").addEventListener("click", e => {
 document.getElementById("expenseList").addEventListener("change", e => {
   const sc = e.target.closest(".ed-scope");
   if (!sc) return;
-  const field = sc.closest(".expense").querySelector(".ed-mealfield");
-  if (field) field.style.display = sc.value === "meals" ? "" : "none";
+  const card = sc.closest(".expense");
+  const mf = card.querySelector(".ed-mealfield");
+  const pf = card.querySelector(".ed-peoplefield");
+  if (mf) mf.style.display = sc.value === "meals" ? "" : "none";
+  if (pf) pf.style.display = sc.value === "people" ? "" : "none";
 });
 
 // ---------- Mode nit ----------
