@@ -102,9 +102,6 @@
   table.att th.meal { background: var(--green-light); color: var(--green-dark); font-weight: 600; }
   table.att td.name, table.att th.name { text-align: left; font-weight: 600; position: sticky; left: 0; background: var(--card); z-index: 2; }
   table.att th.name { background: var(--green-dark); color:#fff; }
-  table.att td.mealname { background: var(--green-light); color: var(--green-dark); }
-  table.att td.dayrow { text-align: left; background: var(--green-dark); color: #fff; font-weight: 700; position: sticky; left: 0; }
-  table.att th.pname { font-size: .78rem; }
   table.att td.total, table.att th.total { font-weight: 700; background: var(--bg); }
   .chk {
     width: 34px; height: 34px;
@@ -408,45 +405,44 @@ document.querySelectorAll(".tab").forEach(t => {
 });
 
 // ---------- Render: Àpats ----------
-// Taula transposada: files = àpats (agrupats per dia), columnes = persones.
 function renderAttendance() {
   const t = document.getElementById("attTable");
   const m = state.meals;
-  const np = state.people.length;
+  // capçalera dies (agrupada)
+  let dayRow = '<tr><th class="name" rowspan="2">Persona</th>';
+  let i = 0;
+  while (i < m.length) {
+    let span = 1;
+    while (i + span < m.length && m[i+span].day === m[i].day) span++;
+    dayRow += `<th class="day" colspan="${span}">${m[i].day}</th>`;
+    i += span;
+  }
+  dayRow += '<th class="total" rowspan="2">Àpats</th></tr>';
+  let mealRow = '<tr>';
+  m.forEach(mm => mealRow += `<th class="meal">${mm.type}</th>`);
+  mealRow += '</tr>';
 
-  // Capçalera: cantonada + noms de persona + Total
-  let head = '<tr><th class="name">Àpat</th>';
-  state.people.forEach(p => head += `<th class="meal pname">${esc(p)}</th>`);
-  head += '<th class="total">Total</th></tr>';
-
-  // Files d'àpats, amb separador de dia
   let body = '';
-  let lastDay = null;
-  m.forEach((mm, idx) => {
-    if (mm.day !== lastDay) {
-      body += `<tr><td class="day dayrow" colspan="${np + 2}">${esc(mm.day)}</td></tr>`;
-      lastDay = mm.day;
-    }
-    body += `<tr><td class="name mealname">${esc(mm.type)}</td>`;
+  state.people.forEach((p, pi) => {
+    body += `<tr><td class="name">${esc(p)}</td>`;
     let count = 0;
-    state.people.forEach((p, pi) => {
+    m.forEach((mm, idx) => {
       const on = state.attendance[p] && state.attendance[p][idx];
       if (on) count++;
       body += `<td class="${on?'present':''}"><span class="chk ${on?'on':''}" data-pi="${pi}" data-mi="${idx}"></span></td>`;
     });
     body += `<td class="total">${count}</td></tr>`;
   });
-
-  // Fila final: total d'àpats per persona
+  // totals
   let totRow = '<tr><td class="name total">TOTAL</td>';
-  state.people.forEach(p => {
+  m.forEach((mm, idx) => {
     let c = 0;
-    m.forEach((mm, idx) => { if (state.attendance[p] && state.attendance[p][idx]) c++; });
+    state.people.forEach(p => { if (state.attendance[p] && state.attendance[p][idx]) c++; });
     totRow += `<td class="total">${c}</td>`;
   });
   totRow += '<td class="total"></td></tr>';
 
-  t.innerHTML = head + body + totRow;
+  t.innerHTML = dayRow + mealRow + body + totRow;
 }
 
 // Event delegation: un sol listener per a tota la taula
