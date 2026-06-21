@@ -225,8 +225,8 @@
 
   <!-- DESPESES -->
   <section class="panel" id="despeses">
-    <div class="card">
-      <h2>Afegir despesa</h2>
+    <div class="card" id="expenseForm">
+      <h2 id="expFormTitle">Afegir despesa</h2>
       <div class="field">
         <label>Concepte</label>
         <input type="text" id="expDesc" placeholder="Ex: Compra supermercat, Sopar restaurant…" style="width:100%">
@@ -252,7 +252,10 @@
         <label>Selecciona els àpats</label>
         <div class="meal-checks" id="expMealChecks"></div>
       </div>
-      <button id="btnAddExpense">Afegir despesa</button>
+      <div class="row">
+        <button id="btnAddExpense">Afegir despesa</button>
+        <button class="ghost" id="btnCancelEdit" style="display:none">Cancel·lar edició</button>
+      </div>
     </div>
 
     <div class="card">
@@ -607,7 +610,9 @@ function renderMealChecks() {
     `<span class="mc" data-idx="${idx}">${esc(mm.day)} · ${esc(mm.type)}${state.restaurants[idx]?' 🍽️':''}</span>`
   ).join("");
 }
-function addExpense() {
+let editingId = null;
+
+async function addExpense() {
   const desc = document.getElementById("expDesc").value.trim();
   const amount = parseFloat(document.getElementById("expAmount").value);
   const payer = document.getElementById("expPayer").value;
@@ -618,13 +623,54 @@ function addExpense() {
     meals = [...document.querySelectorAll("#expMealChecks .mc.on")].map(e => parseInt(e.dataset.idx));
     if (meals.length === 0) { alert("Selecciona almenys un àpat."); return; }
   }
-  state.expenses.push({ id: uid(), desc, amount, payer, scope, meals });
+  if (editingId) {
+    if (!await askConfirm(`Desar els canvis de "${desc}"?`)) return;
+    const ex = state.expenses.find(x => x.id === editingId);
+    if (ex) { ex.desc = desc; ex.amount = amount; ex.payer = payer; ex.scope = scope; ex.meals = meals; }
+    cancelEdit();
+  } else {
+    state.expenses.push({ id: uid(), desc, amount, payer, scope, meals });
+  }
   document.getElementById("expDesc").value = "";
   document.getElementById("expAmount").value = "";
   document.getElementById("expScope").value = "all";
   onScopeChange();
   renderMealChecks();
   save(); renderExpenses();
+}
+
+function startEditExpense(id) {
+  const e = state.expenses.find(x => x.id === id);
+  if (!e) return;
+  editingId = id;
+  document.getElementById("expDesc").value = e.desc;
+  document.getElementById("expAmount").value = e.amount;
+  document.getElementById("expPayer").value = e.payer;
+  document.getElementById("expScope").value = e.scope;
+  onScopeChange();
+  renderMealChecks();
+  if (e.scope === "meals") {
+    (e.meals || []).forEach(idx => {
+      const el = document.querySelector(`#expMealChecks .mc[data-idx="${idx}"]`);
+      if (el) el.classList.add("on");
+    });
+  }
+  document.getElementById("expFormTitle").textContent = "Editar despesa";
+  document.getElementById("btnAddExpense").textContent = "Desar canvis";
+  document.getElementById("btnCancelEdit").style.display = "";
+  document.getElementById("expenseForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function cancelEdit() {
+  editingId = null;
+  document.getElementById("expFormTitle").textContent = "Afegir despesa";
+  document.getElementById("btnAddExpense").textContent = "Afegir despesa";
+  document.getElementById("btnCancelEdit").style.display = "none";
+  document.getElementById("expDesc").value = "";
+  document.getElementById("expAmount").value = "";
+  document.getElementById("expScope").value = "all";
+  onScopeChange();
+  renderMealChecks();
 }
 async function removeExpense(id) {
   const e = state.expenses.find(x => x.id === id);
@@ -680,7 +726,10 @@ function renderExpenses() {
           </div>
           <div style="text-align:right">
             <div class="amount">${eur(e.amount)}</div>
-            <button class="danger rm-expense" data-id="${e.id}">Esborrar</button>
+            <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px">
+              <button class="ghost edit-expense" data-id="${e.id}" style="padding:4px 10px;font-size:.8rem">Editar</button>
+              <button class="danger rm-expense" data-id="${e.id}">Esborrar</button>
+            </div>
           </div>
         </div>
         <button class="ghost toggle-bd" style="margin-top:8px;font-size:.8rem;padding:5px 10px">Veure repartiment ▾</button>
@@ -819,9 +868,12 @@ document.getElementById("expMealChecks").addEventListener("click", e => {
 document.getElementById("expenseList").addEventListener("click", e => {
   const rm = e.target.closest(".rm-expense");
   if (rm) { removeExpense(rm.dataset.id); return; }
+  const ed = e.target.closest(".edit-expense");
+  if (ed) { startEditExpense(ed.dataset.id); return; }
   const tg = e.target.closest(".toggle-bd");
   if (tg) tg.nextElementSibling.classList.toggle("show");
 });
+document.getElementById("btnCancelEdit").addEventListener("click", cancelEdit);
 
 renderAll();
 onScopeChange();
