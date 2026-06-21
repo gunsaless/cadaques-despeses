@@ -185,8 +185,11 @@
   .balance-row:last-child { border-bottom: none; }
   .pos { color: var(--accent); font-weight: 700; }
   .neg { color: var(--red); font-weight: 700; }
-  .settle { padding: 10px 12px; background: var(--green-light); border-radius: 8px; margin-bottom: 8px; font-size: .92rem; }
+  .settle { padding: 10px 12px; background: var(--green-light); border-radius: 8px; margin-bottom: 8px; font-size: .92rem; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .settle b { color: var(--accent); }
+  .settle button { padding: 5px 10px; font-size: .8rem; white-space: nowrap; }
+  .settle.done { background: var(--bg); color: var(--muted); }
+  .settle.done b { color: var(--text); }
   .empty { color: var(--muted); font-style: italic; text-align: center; padding: 20px; }
   details > summary { cursor: pointer; list-style: none; user-select: none; }
   details > summary::-webkit-details-marker { display: none; }
@@ -394,7 +397,7 @@ const DEFAULT = (() => {
   const attendance = {};
   people.forEach(p => attendance[p] = a[p].map(x => !!x));
   const restaurants = meals.map(() => false);
-  return { people, meals, attendance, restaurants, expenses: [] };
+  return { people, meals, attendance, restaurants, expenses: [], settlements: [] };
 })();
 
 let state = normalize(load());
@@ -411,6 +414,7 @@ function normalize(s) {
   if (!s.restaurants || s.restaurants.length !== s.meals.length) {
     s.restaurants = s.meals.map((_, i) => !!(s.restaurants && s.restaurants[i]));
   }
+  if (!Array.isArray(s.settlements)) s.settlements = [];
   return s;
 }
 function save() {
@@ -478,6 +482,7 @@ function initCloud() {
     });
     state.restaurants = state.meals.map((_, i) => !!(v.restaurants && v.restaurants[i]));
     state.expenses = v.expenses ? Object.values(v.expenses) : [];
+    state.settlements = v.settlements ? Object.values(v.settlements) : [];
     localStorage.setItem("cadaques2026", JSON.stringify(state));
     renderAll();
     if (document.querySelector('.tab[data-tab="comptes"]').classList.contains("active")) renderComptes();
@@ -493,7 +498,9 @@ function seedCloud() {
   DEFAULT.people.forEach(p => { att[slug(p)] = DEFAULT.attendance[p].map(b => !!b); });
   const exp = {};
   state.expenses.forEach(e => exp[e.id] = e);
-  cloudRoot.set({ people: DEFAULT.people, attendance: att, expenses: exp, restaurants: DEFAULT.restaurants });
+  const set = {};
+  state.settlements.forEach(s => set[s.id] = s);
+  cloudRoot.set({ people: DEFAULT.people, attendance: att, expenses: exp, restaurants: DEFAULT.restaurants, settlements: set });
 }
 
 function cloudSetRestaurant(idx, val) {
@@ -510,6 +517,9 @@ function pushExpensesAndPeople() {
   state.expenses.forEach(e => exp[e.id] = e);
   cloudRoot.child("expenses").set(exp);
   cloudRoot.child("people").set(state.people);
+  const set = {};
+  state.settlements.forEach(s => set[s.id] = s);
+  cloudRoot.child("settlements").set(set);
 }
 function cloudInitPersonAttendance(p) {
   if (useCloud && !applyingRemote) cloudRoot.child("attendance/" + slug(p)).set(state.meals.map(() => false));
@@ -849,6 +859,19 @@ function expenseEditHtml(e) {
     </div>`;
 }
 
+// ---------- Pagaments fets ----------
+function markPaid(from, to, amt) {
+  state.settlements.push({ id: uid(), from, to, amount: Math.round(amt * 100) / 100 });
+  save(); renderComptes();
+}
+async function undoPaid(id) {
+  const s = state.settlements.find(x => x.id === id);
+  const label = s ? `el pagament de ${s.from} a ${s.to} (${eur(s.amount)})` : "aquest pagament";
+  if (!await askConfirm(`Desfer ${label}?`)) return;
+  state.settlements = state.settlements.filter(x => x.id !== id);
+  save(); renderComptes();
+}
+
 // ---------- Comptes ----------
 function computeBalances() {
   const paid = {}, owed = {};
@@ -862,6 +885,13 @@ function computeBalances() {
   const bal = {};
   const names = new Set([...state.people, ...Object.keys(paid)]);
   names.forEach(p => bal[p] = (paid[p]||0) - (owed[p]||0));
+  // Pagaments ja fets: qui paga puja el saldo, qui cobra el baixa
+  state.settlements.forEach(s => {
+    if (bal[s.from] === undefined) bal[s.from] = 0;
+    if (bal[s.to] === undefined) bal[s.to] = 0;
+    bal[s.from] += s.amount;
+    bal[s.to] -= s.amount;
+  });
   return { paid, owed, bal };
 }
 
@@ -929,9 +959,16 @@ function renderComptes() {
     if (creditors[j].v < 0.005) j++;
   }
   const sdiv = document.getElementById("settlements");
-  sdiv.innerHTML = tx.length
-    ? tx.map(t => `<div class="settle"><b>${esc(t.from)}</b> paga <b>${eur(t.amt)}</b> a <b>${esc(t.to)}</b></div>`).join("")
-    : '<div class="empty">Tot quadrat! No hi ha res a pagar.</div>';
+  const pending = tx.length
+    ? tx.map(t => `<div class="settle"><span><b>${esc(t.from)}</b> paga <b>${eur(t.amt)}</b> a <b>${esc(t.to)}</b></span>` +
+        `<button class="mark-paid" data-from="${escAttr(t.from)}" data-to="${escAttr(t.to)}" data-amt="${t.amt.toFixed(2)}">Marcar pagat</button></div>`).join("")
+    : '<div class="empty">Tot quadrat! No hi ha res pendent.</div>';
+  const done = state.settlements.length
+    ? `<h3 style="margin-top:14px">Pagaments fets</h3>` + state.settlements.map(s =>
+        `<div class="settle done"><span>✅ <b>${esc(s.from)}</b> ha pagat <b>${eur(s.amount)}</b> a <b>${esc(s.to)}</b></span>` +
+        `<button class="ghost undo-paid" data-id="${s.id}">Desfer</button></div>`).join("")
+    : "";
+  sdiv.innerHTML = pending + done;
 
   // Resum per persona (agrupant les transaccions)
   const pdiv = document.getElementById("perPerson");
@@ -995,6 +1032,12 @@ document.getElementById("expenseList").addEventListener("click", e => {
   if (mc) { mc.classList.toggle("on"); return; }
   const tg = e.target.closest(".toggle-bd");
   if (tg) tg.nextElementSibling.classList.toggle("show");
+});
+document.getElementById("settlements").addEventListener("click", e => {
+  const mp = e.target.closest(".mark-paid");
+  if (mp) { markPaid(mp.dataset.from, mp.dataset.to, parseFloat(mp.dataset.amt)); return; }
+  const up = e.target.closest(".undo-paid");
+  if (up) { undoPaid(up.dataset.id); return; }
 });
 // Mostrar/amagar selecció d'àpats dins l'edició inline
 document.getElementById("expenseList").addEventListener("change", e => {
