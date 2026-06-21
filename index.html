@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Despeses Cadaqués 2026</title>
+<style>
+  :root {
+    --green: #4a9b6e;
+    --green-light: #cfe8db;
+    --green-dark: #2f7350;
+    --bg: #f5f7f6;
+    --card: #ffffff;
+    --border: #e2e8e4;
+    --text: #1f2a24;
+    --muted: #6b7d73;
+    --red: #c0563f;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.45;
+  }
+  header {
+    background: var(--green-dark);
+    color: #fff;
+    padding: 18px 20px;
+    text-align: center;
+  }
+  header h1 { margin: 0; font-size: 1.4rem; letter-spacing: .5px; }
+  header p { margin: 4px 0 0; opacity: .85; font-size: .85rem; }
+  .tabs {
+    display: flex;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .tab {
+    flex: 1;
+    padding: 14px 8px;
+    text-align: center;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: .9rem;
+    color: var(--muted);
+    border-bottom: 3px solid transparent;
+    user-select: none;
+  }
+  .tab.active { color: var(--green-dark); border-bottom-color: var(--green); }
+  main { max-width: 960px; margin: 0 auto; padding: 18px 14px 60px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+  h2 { font-size: 1.05rem; margin: 0 0 12px; }
+  h3 { font-size: .9rem; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  button {
+    font: inherit;
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 14px;
+    background: var(--green);
+    color: #fff;
+    font-weight: 600;
+  }
+  button:hover { background: var(--green-dark); }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  button.ghost:hover { background: var(--bg); color: var(--text); }
+  button.danger { background: transparent; color: var(--red); padding: 4px 8px; font-size: .8rem; }
+  button.danger:hover { background: #fbe9e5; }
+  input, select {
+    font: inherit;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--text);
+    max-width: 100%;
+  }
+  input:focus, select:focus { outline: 2px solid var(--green-light); border-color: var(--green); }
+  label { font-size: .85rem; font-weight: 600; display: block; margin-bottom: 4px; }
+  .field { margin-bottom: 12px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table.att { border-collapse: collapse; font-size: .82rem; min-width: 100%; }
+  table.att th, table.att td { border: 1px solid var(--border); padding: 5px 7px; text-align: center; white-space: nowrap; }
+  table.att th.day { background: var(--green-dark); color: #fff; }
+  table.att th.meal { background: var(--green-light); color: var(--green-dark); font-weight: 600; }
+  table.att td.name, table.att th.name { text-align: left; font-weight: 600; position: sticky; left: 0; background: var(--card); z-index: 2; }
+  table.att th.name { background: var(--green-dark); color:#fff; }
+  table.att td.total, table.att th.total { font-weight: 700; background: var(--bg); }
+  .chk {
+    width: 22px; height: 22px;
+    border: 2px solid var(--border);
+    border-radius: 5px;
+    display: inline-block;
+    cursor: pointer;
+    vertical-align: middle;
+  }
+  .chk.on { background: var(--green); border-color: var(--green); position: relative; }
+  .chk.on::after {
+    content: "✓"; color: #fff; font-size: 15px; font-weight: 700;
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-52%);
+  }
+  td.present { background: var(--green-light); }
+  .expense {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .expense .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .expense .desc { font-weight: 700; }
+  .expense .meta { font-size: .82rem; color: var(--muted); margin-top: 2px; }
+  .amount { font-weight: 700; font-size: 1.05rem; white-space: nowrap; }
+  .tag { display: inline-block; font-size: .72rem; background: var(--green-light); color: var(--green-dark); padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+  .breakdown { margin-top: 8px; font-size: .82rem; color: var(--muted); display: none; }
+  .breakdown.show { display: block; }
+  .breakdown table { width: 100%; border-collapse: collapse; }
+  .breakdown td { padding: 2px 0; }
+  .breakdown td:last-child { text-align: right; }
+  .balance-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .balance-row:last-child { border-bottom: none; }
+  .pos { color: var(--green-dark); font-weight: 700; }
+  .neg { color: var(--red); font-weight: 700; }
+  .settle { padding: 10px 12px; background: var(--green-light); border-radius: 8px; margin-bottom: 8px; font-size: .92rem; }
+  .settle b { color: var(--green-dark); }
+  .empty { color: var(--muted); font-style: italic; text-align: center; padding: 20px; }
+  .meal-checks { display: flex; flex-wrap: wrap; gap: 6px; }
+  .meal-checks .mc {
+    font-size: .78rem; padding: 5px 9px; border: 1px solid var(--border);
+    border-radius: 20px; cursor: pointer; user-select: none;
+  }
+  .meal-checks .mc.on { background: var(--green); color: #fff; border-color: var(--green); }
+  .small { font-size: .82rem; color: var(--muted); }
+  .pill-people { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+  .pill { background: var(--bg); border:1px solid var(--border); border-radius:20px; padding:5px 10px; font-size:.85rem; display:flex; align-items:center; gap:6px; }
+  .pill button { padding:0 4px; font-size:1rem; line-height:1; background:none; color:var(--muted); }
+  .pill button:hover { color:var(--red); background:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏖️ Despeses Cadaqués 2026</h1>
+  <p>Reparteix les despeses segons qui hi és a cada àpat</p>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-tab="apats">📋 Àpats</div>
+  <div class="tab" data-tab="despeses">💸 Despeses</div>
+  <div class="tab" data-tab="comptes">🧮 Comptes</div>
+</div>
+
+<main>
+  <!-- ÀPATS -->
+  <section class="panel active" id="apats">
+    <div class="card">
+      <h2>Qui hi és a cada àpat</h2>
+      <p class="small">Marca les caselles dels àpats que fa cada persona a Cadaqués. Aquesta taula determina com es reparteixen les despeses.</p>
+      <div class="grid-wrap">
+        <table class="att" id="attTable"></table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Persones</h2>
+      <div class="pill-people" id="peoplePills"></div>
+      <div class="row">
+        <input type="text" id="newPerson" placeholder="Nom nou…">
+        <button onclick="addPerson()">Afegir persona</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Àpats</h2>
+      <p class="small">Cada àpat té un dia i un tipus. Pots afegir-ne o treure'n.</p>
+      <div class="pill-people" id="mealPills"></div>
+      <div class="row">
+        <input type="text" id="newMealDay" placeholder="Dia (ex: Dijous 25)" style="flex:1">
+        <input type="text" id="newMealType" placeholder="Tipus (ex: Sopar)" style="flex:1">
+        <button onclick="addMeal()">Afegir àpat</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- DESPESES -->
+  <section class="panel" id="despeses">
+    <div class="card">
+      <h2>Afegir despesa</h2>
+      <div class="field">
+        <label>Concepte</label>
+        <input type="text" id="expDesc" placeholder="Ex: Compra supermercat, Sopar restaurant…" style="width:100%">
+      </div>
+      <div class="row">
+        <div class="field" style="flex:1; min-width:120px;">
+          <label>Import (€)</label>
+          <input type="number" id="expAmount" placeholder="0.00" step="0.01" min="0" style="width:100%">
+        </div>
+        <div class="field" style="flex:1; min-width:140px;">
+          <label>Qui ha pagat</label>
+          <select id="expPayer" style="width:100%"></select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Com es reparteix?</label>
+        <select id="expScope" style="width:100%" onchange="onScopeChange()">
+          <option value="all">Tot el viatge — entre tothom, segons quants àpats fa cadascú</option>
+          <option value="meals">Àpats concrets — només entre els qui hi són en aquells àpats</option>
+        </select>
+      </div>
+      <div class="field" id="mealSelectField" style="display:none;">
+        <label>Selecciona els àpats</label>
+        <div class="meal-checks" id="expMealChecks"></div>
+      </div>
+      <button onclick="addExpense()">Afegir despesa</button>
+    </div>
+
+    <div class="card">
+      <h2>Despeses registrades</h2>
+      <div id="expenseList"></div>
+    </div>
+  </section>
+
+  <!-- COMPTES -->
+  <section class="panel" id="comptes">
+    <div class="card">
+      <h2>Resum</h2>
+      <div id="summaryTop"></div>
+    </div>
+    <div class="card">
+      <h2>Balanç per persona</h2>
+      <p class="small">Positiu = li deuen diners. Negatiu = ha de pagar.</p>
+      <div id="balances"></div>
+    </div>
+    <div class="card">
+      <h2>Com saldar els comptes</h2>
+      <p class="small">Pagaments mínims perquè tothom quedi en paus.</p>
+      <div id="settlements"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+// ---------- Estat ----------
+const DEFAULT = (() => {
+  const people = ["Jordi","Carmeta","Porcu","Adri","Jenni","Helena P","Gerard","Júlia"];
+  const meals = [
+    {day:"Divendres 19", type:"Sopar"},      // 0
+    {day:"Divendres 19", type:"Dorm + Esm."},// 1
+    {day:"Dissabte 20", type:"Dinar"},       // 2
+    {day:"Dissabte 20", type:"Sopar"},       // 3
+    {day:"Dissabte 20", type:"Dorm + Esm."}, // 4
+    {day:"Diumenge 21", type:"Dinar"},       // 5
+    {day:"Diumenge 21", type:"Sopar"},       // 6
+    {day:"Diumenge 21", type:"Dorm + Esm."}, // 7
+    {day:"Dilluns 22", type:"Dinar"},        // 8
+    {day:"Dilluns 22", type:"Sopar"},        // 9
+    {day:"Dilluns 22", type:"Dorm + Esm."},  // 10
+    {day:"Dimarts 23", type:"Dinar"},        // 11
+    {day:"Dimarts 23", type:"Sopar"},        // 12
+    {day:"Dimarts 23", type:"Dorm + Esm."},  // 13
+    {day:"Dimecres 24", type:"Dinar"},       // 14
+  ];
+  // attendance[person] = array de 0/1 (mateix ordre que meals)
+  const a = {
+    "Jordi":   [0,0, 1,1,1, 1,1,1, 0,1,1, 1,1,1, 1],
+    "Carmeta": [0,0, 1,1,1, 1,1,1, 0,1,1, 1,1,1, 1],
+    "Porcu":   [1,1, 1,1,1, 1,1,0, 0,0,0, 0,1,1, 1],
+    "Adri":    [1,1, 1,1,1, 1,1,1, 0,1,1, 1,1,1, 1],
+    "Jenni":   [0,0, 1,1,1, 1,0,0, 0,0,0, 0,0,0, 0],
+    "Helena P":[1,1, 1,1,1, 1,0,0, 0,1,1, 1,1,1, 1],
+    "Gerard":  [0,0, 0,0,0, 0,0,0, 0,1,1, 1,1,1, 1],
+    "Júlia":   [1,1, 1,1,1, 1,1,1, 0,1,1, 1,1,1, 1],
+  };
+  const attendance = {};
+  people.forEach(p => attendance[p] = a[p].map(x => !!x));
+  return { people, meals, attendance, expenses: [] };
+})();
+
+let state = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem("cadaques2026");
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return structuredClone(DEFAULT);
+}
+function save() { localStorage.setItem("cadaques2026", JSON.stringify(state)); }
+
+function uid() { return Math.random().toString(36).slice(2,10); }
+
+// ---------- Tabs ----------
+document.querySelectorAll(".tab").forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    document.getElementById(t.dataset.tab).classList.add("active");
+    if (t.dataset.tab === "comptes") renderComptes();
+  };
+});
+
+// ---------- Render: Àpats ----------
+function renderAttendance() {
+  const t = document.getElementById("attTable");
+  const m = state.meals;
+  // capçalera dies (agrupada)
+  let dayRow = '<tr><th class="name" rowspan="2">Persona</th>';
+  let i = 0;
+  while (i < m.length) {
+    let span = 1;
+    while (i + span < m.length && m[i+span].day === m[i].day) span++;
+    dayRow += `<th class="day" colspan="${span}">${m[i].day}</th>`;
+    i += span;
+  }
+  dayRow += '<th class="total" rowspan="2">Àpats</th></tr>';
+  let mealRow = '<tr>';
+  m.forEach(mm => mealRow += `<th class="meal">${mm.type}</th>`);
+  mealRow += '</tr>';
+
+  let body = '';
+  state.people.forEach(p => {
+    body += `<tr><td class="name">${esc(p)}</td>`;
+    let count = 0;
+    m.forEach((mm, idx) => {
+      const on = state.attendance[p] && state.attendance[p][idx];
+      if (on) count++;
+      body += `<td class="${on?'present':''}"><span class="chk ${on?'on':''}" onclick="toggleAtt('${escAttr(p)}',${idx})"></span></td>`;
+    });
+    body += `<td class="total">${count}</td></tr>`;
+  });
+  // totals
+  let totRow = '<tr><td class="name total">TOTAL</td>';
+  m.forEach((mm, idx) => {
+    let c = 0;
+    state.people.forEach(p => { if (state.attendance[p] && state.attendance[p][idx]) c++; });
+    totRow += `<td class="total">${c}</td>`;
+  });
+  totRow += '<td class="total"></td></tr>';
+
+  t.innerHTML = dayRow + mealRow + body + totRow;
+}
+
+function toggleAtt(p, idx) {
+  if (!state.attendance[p]) state.attendance[p] = state.meals.map(() => false);
+  state.attendance[p][idx] = !state.attendance[p][idx];
+  save();
+  renderAttendance();
+}
+
+function renderPeople() {
+  const c = document.getElementById("peoplePills");
+  c.innerHTML = state.people.map(p =>
+    `<span class="pill">${esc(p)} <button onclick="removePerson('${escAttr(p)}')" title="Treure">×</button></span>`
+  ).join("");
+}
+function addPerson() {
+  const inp = document.getElementById("newPerson");
+  const name = inp.value.trim();
+  if (!name || state.people.includes(name)) { inp.value=""; return; }
+  state.people.push(name);
+  state.attendance[name] = state.meals.map(() => false);
+  inp.value = "";
+  save(); renderAll();
+}
+function removePerson(p) {
+  if (!confirm(`Treure ${p}? Les despeses que ha pagat es mantindran.`)) return;
+  state.people = state.people.filter(x => x !== p);
+  delete state.attendance[p];
+  save(); renderAll();
+}
+
+function renderMeals() {
+  const c = document.getElementById("mealPills");
+  c.innerHTML = state.meals.map((mm, idx) =>
+    `<span class="pill">${esc(mm.day)} · ${esc(mm.type)} <button onclick="removeMeal(${idx})" title="Treure">×</button></span>`
+  ).join("");
+}
+function addMeal() {
+  const d = document.getElementById("newMealDay").value.trim();
+  const ty = document.getElementById("newMealType").value.trim();
+  if (!d || !ty) return;
+  state.meals.push({day:d, type:ty});
+  state.people.forEach(p => state.attendance[p].push(false));
+  document.getElementById("newMealDay").value = "";
+  document.getElementById("newMealType").value = "";
+  save(); renderAll();
+}
+function removeMeal(idx) {
+  if (!confirm("Treure aquest àpat?")) return;
+  state.meals.splice(idx, 1);
+  state.people.forEach(p => state.attendance[p].splice(idx, 1));
+  // netejar referències a despeses
+  state.expenses.forEach(e => {
+    if (e.scope === "meals") e.meals = e.meals.filter(i => i !== idx).map(i => i > idx ? i-1 : i);
+  });
+  save(); renderAll();
+}
+
+// ---------- Despeses ----------
+function renderPayerSelect() {
+  const s = document.getElementById("expPayer");
+  s.innerHTML = state.people.map(p => `<option value="${escAttr(p)}">${esc(p)}</option>`).join("");
+}
+function onScopeChange() {
+  const scope = document.getElementById("expScope").value;
+  document.getElementById("mealSelectField").style.display = scope === "meals" ? "block" : "none";
+}
+function renderMealChecks() {
+  const c = document.getElementById("expMealChecks");
+  c.innerHTML = state.meals.map((mm, idx) =>
+    `<span class="mc" data-idx="${idx}" onclick="this.classList.toggle('on')">${esc(mm.day)} · ${esc(mm.type)}</span>`
+  ).join("");
+}
+function addExpense() {
+  const desc = document.getElementById("expDesc").value.trim();
+  const amount = parseFloat(document.getElementById("expAmount").value);
+  const payer = document.getElementById("expPayer").value;
+  const scope = document.getElementById("expScope").value;
+  if (!desc || !(amount > 0) || !payer) { alert("Omple concepte, import i qui ha pagat."); return; }
+  let meals = [];
+  if (scope === "meals") {
+    meals = [...document.querySelectorAll("#expMealChecks .mc.on")].map(e => parseInt(e.dataset.idx));
+    if (meals.length === 0) { alert("Selecciona almenys un àpat."); return; }
+  }
+  state.expenses.push({ id: uid(), desc, amount, payer, scope, meals });
+  document.getElementById("expDesc").value = "";
+  document.getElementById("expAmount").value = "";
+  document.getElementById("expScope").value = "all";
+  onScopeChange();
+  renderMealChecks();
+  save(); renderExpenses();
+}
+function removeExpense(id) {
+  state.expenses = state.expenses.filter(e => e.id !== id);
+  save(); renderExpenses();
+}
+
+// Calcula qui deu què d'una despesa concreta.
+// Model: cada parella (àpat × persona present) és una "unitat".
+// cost per unitat = import / total unitats. Cada persona deu cost·(nº àpats coberts on hi és).
+function splitExpense(e) {
+  const mealIdxs = e.scope === "all" ? state.meals.map((_,i)=>i) : e.meals;
+  const shares = {}; // persona -> import que li toca
+  let totalUnits = 0;
+  const unitsPer = {};
+  state.people.forEach(p => {
+    let u = 0;
+    mealIdxs.forEach(idx => { if (state.attendance[p] && state.attendance[p][idx]) u++; });
+    unitsPer[p] = u;
+    totalUnits += u;
+  });
+  if (totalUnits === 0) return { shares, totalUnits, perUnit: 0 };
+  const perUnit = e.amount / totalUnits;
+  state.people.forEach(p => { if (unitsPer[p] > 0) shares[p] = perUnit * unitsPer[p]; });
+  return { shares, totalUnits, perUnit };
+}
+
+function renderExpenses() {
+  const c = document.getElementById("expenseList");
+  if (state.expenses.length === 0) { c.innerHTML = '<div class="empty">Encara no hi ha despeses.</div>'; return; }
+  c.innerHTML = state.expenses.map(e => {
+    const { shares, totalUnits } = splitExpense(e);
+    const scopeLabel = e.scope === "all"
+      ? "Tot el viatge"
+      : e.meals.map(i => state.meals[i] ? `${state.meals[i].day} · ${state.meals[i].type}` : "?").join(", ");
+    const valid = totalUnits > 0;
+    let rows = state.people
+      .filter(p => shares[p])
+      .map(p => `<tr><td>${esc(p)}</td><td>${eur(shares[p])}</td></tr>`).join("");
+    if (!valid) rows = `<tr><td colspan="2" style="color:var(--red)">Cap persona present en aquests àpats — no es pot repartir.</td></tr>`;
+    return `
+      <div class="expense">
+        <div class="top">
+          <div>
+            <div class="desc">${esc(e.desc)}</div>
+            <div class="meta">Pagat per <b>${esc(e.payer)}</b></div>
+            <div style="margin-top:4px"><span class="tag">${esc(scopeLabel)}</span></div>
+          </div>
+          <div style="text-align:right">
+            <div class="amount">${eur(e.amount)}</div>
+            <button class="danger" onclick="removeExpense('${e.id}')">Esborrar</button>
+          </div>
+        </div>
+        <button class="ghost" style="margin-top:8px;font-size:.8rem;padding:5px 10px" onclick="this.nextElementSibling.classList.toggle('show')">Veure repartiment ▾</button>
+        <div class="breakdown">
+          <table>${rows}</table>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+// ---------- Comptes ----------
+function computeBalances() {
+  const paid = {}, owed = {};
+  state.people.forEach(p => { paid[p] = 0; owed[p] = 0; });
+  state.expenses.forEach(e => {
+    if (paid[e.payer] === undefined) paid[e.payer] = 0;
+    paid[e.payer] += e.amount;
+    const { shares } = splitExpense(e);
+    Object.entries(shares).forEach(([p, v]) => { owed[p] = (owed[p]||0) + v; });
+  });
+  const bal = {};
+  const names = new Set([...state.people, ...Object.keys(paid)]);
+  names.forEach(p => bal[p] = (paid[p]||0) - (owed[p]||0));
+  return { paid, owed, bal };
+}
+
+function renderComptes() {
+  const { paid, owed, bal } = computeBalances();
+  const total = state.expenses.reduce((s,e)=>s+e.amount,0);
+
+  document.getElementById("summaryTop").innerHTML = `
+    <div class="balance-row"><span>Despesa total</span><span class="amount">${eur(total)}</span></div>
+    <div class="balance-row"><span>Nombre de despeses</span><span>${state.expenses.length}</span></div>`;
+
+  const bdiv = document.getElementById("balances");
+  bdiv.innerHTML = state.people.map(p => {
+    const v = bal[p] || 0;
+    const cls = v > 0.005 ? "pos" : (v < -0.005 ? "neg" : "");
+    const txt = v > 0.005 ? `+${eur(v)} (li deuen)` : (v < -0.005 ? `${eur(v)} (ha de pagar)` : "0 €");
+    return `<div class="balance-row">
+      <span>${esc(p)}<div class="small">Pagat ${eur(paid[p]||0)} · Li toca ${eur(owed[p]||0)}</div></span>
+      <span class="${cls}">${txt}</span></div>`;
+  }).join("");
+
+  // saldar (greedy)
+  const creditors = [], debtors = [];
+  state.people.forEach(p => {
+    const v = Math.round((bal[p]||0)*100)/100;
+    if (v > 0.005) creditors.push({p, v});
+    else if (v < -0.005) debtors.push({p, v: -v});
+  });
+  creditors.sort((a,b)=>b.v-a.v); debtors.sort((a,b)=>b.v-a.v);
+  const tx = [];
+  let i=0, j=0;
+  while (i < debtors.length && j < creditors.length) {
+    const pay = Math.min(debtors[i].v, creditors[j].v);
+    tx.push({from: debtors[i].p, to: creditors[j].p, amt: pay});
+    debtors[i].v -= pay; creditors[j].v -= pay;
+    if (debtors[i].v < 0.005) i++;
+    if (creditors[j].v < 0.005) j++;
+  }
+  const sdiv = document.getElementById("settlements");
+  sdiv.innerHTML = tx.length
+    ? tx.map(t => `<div class="settle"><b>${esc(t.from)}</b> paga <b>${eur(t.amt)}</b> a <b>${esc(t.to)}</b></div>`).join("")
+    : '<div class="empty">Tot quadrat! No hi ha res a pagar.</div>';
+}
+
+// ---------- Utils ----------
+function eur(n) { return (Math.round(n*100)/100).toLocaleString("ca-ES",{style:"currency",currency:"EUR"}); }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function escAttr(s){ return String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+function renderAll() {
+  renderAttendance();
+  renderPeople();
+  renderMeals();
+  renderPayerSelect();
+  renderMealChecks();
+  renderExpenses();
+}
+renderAll();
+onScopeChange();
+</script>
+</body>
+</html>
