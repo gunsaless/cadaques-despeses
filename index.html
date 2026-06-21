@@ -156,6 +156,7 @@
 <header>
   <h1>🏖️ Despeses Cadaqués 2026</h1>
   <p>Reparteix les despeses segons qui hi és a cada àpat</p>
+  <p id="syncBadge" style="margin-top:6px;font-size:.78rem;font-weight:600">…</p>
 </header>
 
 <div class="tabs">
@@ -242,7 +243,27 @@
   </section>
 </main>
 
+<!-- Firebase (sincronització entre dispositius) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
 <script>
+// ======================================================================
+//  CONFIGURACIÓ FIREBASE
+//  Enganxa aquí la config del teu projecte (Consola Firebase → ⚙️ →
+//  Configuració del projecte → Les teves apps → SDK). Deixa-ho buit per
+//  funcionar només en local (les dades es queden en aquest dispositiu).
+// ======================================================================
+const FIREBASE_CONFIG = {
+  // apiKey: "…",
+  // authDomain: "…",
+  // databaseURL: "https://EL-TEU-PROJECTE-default-rtdb.europe-west1.firebasedatabase.app",
+  // projectId: "…",
+  // storageBucket: "…",
+  // messagingSenderId: "…",
+  // appId: "…",
+};
+
 // ---------- Estat ----------
 const DEFAULT = (() => {
   const people = ["Jordi","Carmeta","Porcu","Adri","Jenni","Helena P","Gerard","Júlia"];
@@ -288,9 +309,87 @@ function load() {
   } catch(e) {}
   return structuredClone(DEFAULT);
 }
-function save() { localStorage.setItem("cadaques2026", JSON.stringify(state)); }
+function save() {
+  localStorage.setItem("cadaques2026", JSON.stringify(state));
+  if (useCloud) pushExpensesAndPeople();
+}
 
 function uid() { return Math.random().toString(36).slice(2,10); }
+
+// ====================== SINCRONITZACIÓ (Firebase) ======================
+let db = null, cloudRoot = null, useCloud = false, applyingRemote = false, roomId = "";
+
+function slug(s) { return String(s).replace(/[.#$\[\]\/]/g, "_"); }
+
+function setSyncBadge(text, ok) {
+  const el = document.getElementById("syncBadge");
+  if (el) { el.textContent = text; el.style.opacity = ok ? "1" : ".7"; }
+}
+
+function initCloud() {
+  if (!FIREBASE_CONFIG || !FIREBASE_CONFIG.databaseURL) {
+    setSyncBadge("💾 Només en aquest dispositiu", false);
+    return false;
+  }
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+  } catch (e) {
+    setSyncBadge("⚠️ Error de connexió — mode local", false);
+    return false;
+  }
+  const params = new URLSearchParams(location.hash.slice(1));
+  roomId = params.get("room") || "cadaques2026";
+  cloudRoot = db.ref("cadaques/" + roomId);
+  useCloud = true;
+
+  cloudRoot.on("value", (snap) => {
+    const v = snap.val();
+    if (!v || !v.people) { seedCloud(); return; }
+    applyingRemote = true;
+    state.people = v.people;
+    state.attendance = {};
+    state.people.forEach(p => {
+      const arr = (v.attendance && v.attendance[slug(p)]) || {};
+      state.attendance[p] = state.meals.map((_, i) => !!arr[i]);
+    });
+    state.expenses = v.expenses ? Object.values(v.expenses) : [];
+    localStorage.setItem("cadaques2026", JSON.stringify(state));
+    renderAll();
+    if (document.querySelector('.tab[data-tab="comptes"]').classList.contains("active")) renderComptes();
+    setSyncBadge("🟢 Sincronitzat", true);
+    applyingRemote = false;
+  }, () => setSyncBadge("⚠️ Sense accés (revisa les regles)", false));
+
+  return true;
+}
+
+function seedCloud() {
+  const att = {};
+  DEFAULT.people.forEach(p => { att[slug(p)] = DEFAULT.attendance[p].map(b => !!b); });
+  const exp = {};
+  state.expenses.forEach(e => exp[e.id] = e);
+  cloudRoot.set({ people: DEFAULT.people, attendance: att, expenses: exp });
+}
+
+// Escriptures granulars (no es trepitgen entre dispositius)
+function cloudSetAttendance(p, idx, val) {
+  if (useCloud && !applyingRemote) cloudRoot.child("attendance/" + slug(p) + "/" + idx).set(val);
+}
+function pushExpensesAndPeople() {
+  if (!useCloud || applyingRemote) return;
+  const exp = {};
+  state.expenses.forEach(e => exp[e.id] = e);
+  cloudRoot.child("expenses").set(exp);
+  cloudRoot.child("people").set(state.people);
+}
+function cloudInitPersonAttendance(p) {
+  if (useCloud && !applyingRemote) cloudRoot.child("attendance/" + slug(p)).set(state.meals.map(() => false));
+}
+function cloudRemovePersonAttendance(p) {
+  if (useCloud && !applyingRemote) cloudRoot.child("attendance/" + slug(p)).remove();
+}
+// =======================================================================
 
 // ---------- Tabs ----------
 document.querySelectorAll(".tab").forEach(t => {
@@ -352,8 +451,10 @@ document.getElementById("attTable").addEventListener("click", (ev) => {
   const idx = parseInt(cell.dataset.mi);
   if (p === undefined || isNaN(idx)) return;
   if (!state.attendance[p]) state.attendance[p] = state.meals.map(() => false);
-  state.attendance[p][idx] = !state.attendance[p][idx];
-  save();
+  const val = !state.attendance[p][idx];
+  state.attendance[p][idx] = val;
+  localStorage.setItem("cadaques2026", JSON.stringify(state));
+  cloudSetAttendance(p, idx, val);
   renderAttendance();
 });
 
@@ -370,12 +471,14 @@ function addPerson() {
   state.people.push(name);
   state.attendance[name] = state.meals.map(() => false);
   inp.value = "";
+  cloudInitPersonAttendance(name);
   save(); renderAll();
 }
 function removePerson(p) {
   if (!confirm(`Treure ${p}? Les despeses que ha pagat es mantindran.`)) return;
   state.people = state.people.filter(x => x !== p);
   delete state.attendance[p];
+  cloudRemovePersonAttendance(p);
   save(); renderAll();
 }
 
@@ -565,6 +668,7 @@ document.getElementById("expenseList").addEventListener("click", e => {
 
 renderAll();
 onScopeChange();
+initCloud(); // si hi ha config de Firebase, sincronitza; si no, mode local
 </script>
 </body>
 </html>
