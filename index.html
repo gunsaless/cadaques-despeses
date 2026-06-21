@@ -817,14 +817,23 @@ function renderComptes() {
       if (att === 0) return;
       const portion = perUnit * mealWeight(idx) * att;
       const key = state.restaurants[idx] ? "🍽️ Restaurant" : (state.meals[idx] ? state.meals[idx].type : "?");
-      if (!cat[key]) cat[key] = { total: 0, days: new Set(), att: 0 };
+      if (!cat[key]) cat[key] = { total: 0, days: new Set() };
       cat[key].total += portion;
       cat[key].days.add(idx);
-      cat[key].att += att;
     });
   });
+  // Assistències per àpat (persona × àpat), comptades un sol cop
+  function attOf(idx) {
+    let a = 0;
+    state.people.forEach(p => { if (state.attendance[p] && state.attendance[p][idx]) a++; });
+    return a;
+  }
   const catEntries = Object.entries(cat)
-    .map(([k, v]) => ({ k, perPerson: v.total / v.att, n: v.days.size }))
+    .map(([k, v]) => {
+      let personMeals = 0;
+      v.days.forEach(idx => personMeals += attOf(idx));
+      return { k, perPerson: personMeals ? v.total / personMeals : 0, n: v.days.size };
+    })
     .sort((a,b) => b.perPerson - a.perPerson);
   const cdiv = document.getElementById("byCategory");
   cdiv.innerHTML = catEntries.length
