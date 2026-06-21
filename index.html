@@ -96,23 +96,25 @@
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
   .grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table.att { border-collapse: collapse; font-size: .82rem; min-width: 100%; }
-  table.att th, table.att td { border: 1px solid var(--border); padding: 5px 7px; text-align: center; white-space: nowrap; }
+  table.att th, table.att td { border: 1px solid var(--border); padding: 6px 9px; text-align: center; white-space: nowrap; }
+  table.att td:has(.chk) { padding: 7px 11px; }
   table.att th.day { background: var(--green-dark); color: #fff; }
   table.att th.meal { background: var(--green-light); color: var(--green-dark); font-weight: 600; }
   table.att td.name, table.att th.name { text-align: left; font-weight: 600; position: sticky; left: 0; background: var(--card); z-index: 2; }
   table.att th.name { background: var(--green-dark); color:#fff; }
   table.att td.total, table.att th.total { font-weight: 700; background: var(--bg); }
   .chk {
-    width: 22px; height: 22px;
+    width: 34px; height: 34px;
     border: 2px solid var(--border);
-    border-radius: 5px;
+    border-radius: 7px;
     display: inline-block;
     cursor: pointer;
     vertical-align: middle;
+    touch-action: manipulation;
   }
   .chk.on { background: var(--green); border-color: var(--green); position: relative; }
   .chk.on::after {
-    content: "✓"; color: #fff; font-size: 15px; font-weight: 700;
+    content: "✓"; color: #fff; font-size: 22px; font-weight: 700;
     position: absolute; left: 50%; top: 50%; transform: translate(-50%,-52%);
   }
   td.present { background: var(--green-light); }
