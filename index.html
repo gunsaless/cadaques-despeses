@@ -248,7 +248,7 @@
 
     <div class="card">
       <h2>Qui hi és a cada àpat</h2>
-      <p class="small">Marca les caselles dels àpats que fa cada persona a Cadaqués. Aquesta taula determina com es reparteixen les despeses. Amb 🍽️ pots marcar els àpats fets al restaurant: quedaran fora del repartiment de la compra general (la factura s'afegeix com a despesa a part).</p>
+      <p class="small">Marca les caselles dels àpats que fa cada persona a Cadaqués. Aquesta taula determina com es reparteixen les despeses. Amb 🍽️ pots marcar els àpats fets al restaurant: quedaran fora del repartiment de la compra general (la factura s'afegeix com a despesa a part). Nota: a l'hora de repartir, un esmorzar compta la meitat que un dinar o un sopar.</p>
       <div class="grid-wrap">
         <table class="att" id="attTable"></table>
       </div>
@@ -716,6 +716,12 @@ async function removeExpense(id) {
 // Calcula qui deu què d'una despesa concreta.
 // Model: cada parella (àpat × persona present) és una "unitat".
 // cost per unitat = import / total unitats. Cada persona deu cost·(nº àpats coberts on hi és).
+// Pes de cada àpat al repartiment: dinar i sopar = 1, esmorzar = 0,5.
+function mealWeight(idx) {
+  const t = state.meals[idx] ? state.meals[idx].type.toLowerCase() : "";
+  return t.includes("esm") ? 0.5 : 1;
+}
+
 function splitExpense(e) {
   // "Tot el viatge" reparteix només entre àpats NO de restaurant (els de restaurant es paguen a part).
   const mealIdxs = e.scope === "all"
@@ -726,7 +732,7 @@ function splitExpense(e) {
   const unitsPer = {};
   state.people.forEach(p => {
     let u = 0;
-    mealIdxs.forEach(idx => { if (state.attendance[p] && state.attendance[p][idx]) u++; });
+    mealIdxs.forEach(idx => { if (state.attendance[p] && state.attendance[p][idx]) u += mealWeight(idx); });
     unitsPer[p] = u;
     totalUnits += u;
   });
@@ -809,7 +815,7 @@ function renderComptes() {
     idxs.forEach(idx => {
       let att = 0;
       state.people.forEach(p => { if (state.attendance[p] && state.attendance[p][idx]) att++; });
-      const portion = perUnit * att;
+      const portion = perUnit * mealWeight(idx) * att;
       const key = state.restaurants[idx] ? "🍽️ Restaurant" : (state.meals[idx] ? state.meals[idx].type : "?");
       cat[key] = (cat[key] || 0) + portion;
     });
