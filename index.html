@@ -738,7 +738,7 @@ document.getElementById("attTable").addEventListener("click", (ev) => {
 function renderPeople() {
   const c = document.getElementById("peoplePills");
   c.innerHTML = state.people.map(p =>
-    `<span class="pill">${esc(p)} <button class="rm-person" data-pi="${state.people.indexOf(p)}" title="Treure">×</button></span>`
+    `<span class="pill">${esc(p)} <button class="edit-person" data-pi="${state.people.indexOf(p)}" title="Editar nom">✏️</button> <button class="rm-person" data-pi="${state.people.indexOf(p)}" title="Treure">×</button></span>`
   ).join("");
 }
 function addPerson() {
@@ -757,6 +757,26 @@ async function removePerson(p) {
   delete state.attendance[p];
   cloudRemovePersonAttendance(p);
   save(); renderAll();
+}
+async function renamePerson(oldName) {
+  const name = await askText("Nou nom per a " + oldName + ":", oldName);
+  if (name === null || name === "" || name === oldName) return;
+  if (state.people.includes(name)) { alert("Ja hi ha una persona amb aquest nom."); return; }
+  // Renombra a tot arreu
+  state.people = state.people.map(p => p === oldName ? name : p);
+  state.attendance[name] = state.attendance[oldName] || state.meals.map(() => false);
+  delete state.attendance[oldName];
+  state.expenses.forEach(e => {
+    if (e.payer === oldName) e.payer = name;
+    if (Array.isArray(e.people)) e.people = e.people.map(p => p === oldName ? name : p);
+  });
+  state.settlements.forEach(s => {
+    if (s.from === oldName) s.from = name;
+    if (s.to === oldName) s.to = name;
+  });
+  if (useCloud && !applyingRemote) cloudRemovePersonAttendance(oldName);
+  save(); // pushEventFull reescriu tot (inclou l'assistència amb el nou nom)
+  renderAll();
 }
 
 // ---------- Despeses ----------
@@ -1245,6 +1265,8 @@ document.getElementById("btnAddExpense").addEventListener("click", addExpense);
 document.getElementById("expScope").addEventListener("change", onScopeChange);
 
 document.getElementById("peoplePills").addEventListener("click", e => {
+  const ed = e.target.closest(".edit-person");
+  if (ed) { renamePerson(state.people[parseInt(ed.dataset.pi)]); return; }
   const b = e.target.closest(".rm-person");
   if (b) removePerson(state.people[parseInt(b.dataset.pi)]);
 });
