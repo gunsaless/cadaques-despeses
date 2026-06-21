@@ -241,6 +241,7 @@
   <p>Reparteix les despeses segons qui hi és a cada àpat</p>
   <div id="eventBar">
     <select id="eventSelect" title="Esdeveniment"></select>
+    <button id="btnRenameEvent" class="ghost" title="Editar el nom">✏️</button>
     <button id="btnNewEvent" title="Nou esdeveniment">＋ Nou</button>
     <button id="btnDeleteEvent" class="ghost" title="Esborrar esdeveniment">🗑️</button>
   </div>
@@ -350,6 +351,18 @@
     <div class="modal-btns">
       <button class="ghost" id="confirmCancel">Cancel·lar</button>
       <button id="confirmOk">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: entrada de text -->
+<div id="promptOverlay" class="overlay">
+  <div class="modal">
+    <p id="promptMsg"></p>
+    <input type="text" id="promptInput" style="width:100%;margin-bottom:18px">
+    <div class="modal-btns">
+      <button class="ghost" id="promptCancel">Cancel·lar</button>
+      <button id="promptOk">Desar</button>
     </div>
   </div>
 </div>
@@ -512,6 +525,29 @@ function askConfirm(message) {
     cancel.onclick = () => close(false);
     ov.onclick = (e) => { if (e.target === ov) close(false); };
     ov.classList.add("show");
+  });
+}
+
+// Diàleg d'entrada de text (retorna el text o null)
+function askText(message, initial) {
+  return new Promise(resolve => {
+    const ov = document.getElementById("promptOverlay");
+    document.getElementById("promptMsg").textContent = message;
+    const inp = document.getElementById("promptInput");
+    inp.value = initial || "";
+    const ok = document.getElementById("promptOk");
+    const cancel = document.getElementById("promptCancel");
+    const close = (val) => {
+      ov.classList.remove("show");
+      ok.onclick = null; cancel.onclick = null; ov.onclick = null; inp.onkeydown = null;
+      resolve(val);
+    };
+    ok.onclick = () => close(inp.value.trim());
+    cancel.onclick = () => close(null);
+    inp.onkeydown = (e) => { if (e.key === "Enter") close(inp.value.trim()); };
+    ov.onclick = (e) => { if (e.target === ov) close(null); };
+    ov.classList.add("show");
+    setTimeout(() => inp.focus(), 30);
   });
 }
 
@@ -1172,6 +1208,19 @@ function doCreateEvent() {
   applyEventToUI();
 }
 
+async function renameEvent() {
+  const name = await askText("Nou nom de l'esdeveniment:", state.name);
+  if (name === null || name === "" || name === state.name) return;
+  state.name = name;
+  eventsIndex[currentEventId] = { name };
+  if (useCloud) {
+    db.ref("cadaques/_index/" + currentEventId).set({ name });
+    cloudRoot.child("name").set(name);
+  }
+  save();
+  applyEventToUI();
+}
+
 async function deleteCurrentEvent() {
   const ids = Object.keys(eventsIndex);
   if (ids.length <= 1) { alert("No pots esborrar l'únic esdeveniment."); return; }
@@ -1230,6 +1279,7 @@ document.getElementById("settlements").addEventListener("click", e => {
 
 // Esdeveniments
 document.getElementById("eventSelect").addEventListener("change", e => switchEvent(e.target.value));
+document.getElementById("btnRenameEvent").addEventListener("click", renameEvent);
 document.getElementById("btnNewEvent").addEventListener("click", openNewEvent);
 document.getElementById("btnDeleteEvent").addEventListener("click", deleteCurrentEvent);
 document.getElementById("neCreate").addEventListener("click", doCreateEvent);
