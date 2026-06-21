@@ -188,6 +188,10 @@
   .settle { padding: 10px 12px; background: var(--green-light); border-radius: 8px; margin-bottom: 8px; font-size: .92rem; }
   .settle b { color: var(--accent); }
   .empty { color: var(--muted); font-style: italic; text-align: center; padding: 20px; }
+  details > summary { cursor: pointer; list-style: none; user-select: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary h2::after { content: " ▸"; color: var(--muted); font-weight: 400; }
+  details[open] > summary h2::after { content: " ▾"; }
   .pp-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
   .pp-name { font-weight: 700; margin-bottom: 6px; }
   .pp-line { font-size: .9rem; padding: 3px 0; }
@@ -313,15 +317,15 @@
       <div id="balances"></div>
     </div>
     <div class="card">
-      <h2>Com saldar els comptes</h2>
-      <p class="small">Pagaments mínims perquè tothom quedi en paus.</p>
-      <div id="settlements"></div>
-    </div>
-    <div class="card">
       <h2>Resum per persona</h2>
       <p class="small">Què ha de pagar i a qui, i qui li ha de pagar a ell/a.</p>
       <div id="perPerson"></div>
     </div>
+    <details class="card">
+      <summary><h2 style="display:inline">Com saldar els comptes</h2></summary>
+      <p class="small">Pagaments mínims perquè tothom quedi en paus.</p>
+      <div id="settlements"></div>
+    </details>
   </section>
 </main>
 
