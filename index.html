@@ -262,7 +262,7 @@
   <!-- DESPESES -->
   <section class="panel" id="despeses">
     <div class="card" id="expenseForm">
-      <h2 id="expFormTitle">Afegir despesa</h2>
+      <h2>Afegir despesa</h2>
       <div class="field">
         <label>Concepte</label>
         <input type="text" id="expDesc" placeholder="Ex: Compra supermercat, Sopar restaurant…" style="width:100%">
@@ -290,7 +290,6 @@
       </div>
       <div class="row">
         <button id="btnAddExpense">Afegir despesa</button>
-        <button class="ghost" id="btnCancelEdit" style="display:none">Cancel·lar edició</button>
       </div>
     </div>
 
@@ -644,7 +643,7 @@ function renderMealChecks() {
 }
 let editingId = null;
 
-async function addExpense() {
+function addExpense() {
   const desc = document.getElementById("expDesc").value.trim();
   const amount = parseFloat(document.getElementById("expAmount").value);
   const payer = document.getElementById("expPayer").value;
@@ -655,14 +654,7 @@ async function addExpense() {
     meals = [...document.querySelectorAll("#expMealChecks .mc.on")].map(e => parseInt(e.dataset.idx));
     if (meals.length === 0) { alert("Selecciona almenys un àpat."); return; }
   }
-  if (editingId) {
-    if (!await askConfirm(`Desar els canvis de "${desc}"?`)) return;
-    const ex = state.expenses.find(x => x.id === editingId);
-    if (ex) { ex.desc = desc; ex.amount = amount; ex.payer = payer; ex.scope = scope; ex.meals = meals; }
-    cancelEdit();
-  } else {
-    state.expenses.push({ id: uid(), desc, amount, payer, scope, meals });
-  }
+  state.expenses.push({ id: uid(), desc, amount, payer, scope, meals });
   document.getElementById("expDesc").value = "";
   document.getElementById("expAmount").value = "";
   document.getElementById("expScope").value = "all";
@@ -671,38 +663,33 @@ async function addExpense() {
   save(); renderExpenses();
 }
 
+// Edició inline (dins de la pròpia despesa)
 function startEditExpense(id) {
-  const e = state.expenses.find(x => x.id === id);
-  if (!e) return;
   editingId = id;
-  document.getElementById("expDesc").value = e.desc;
-  document.getElementById("expAmount").value = e.amount;
-  document.getElementById("expPayer").value = e.payer;
-  document.getElementById("expScope").value = e.scope;
-  onScopeChange();
-  renderMealChecks();
-  if (e.scope === "meals") {
-    (e.meals || []).forEach(idx => {
-      const el = document.querySelector(`#expMealChecks .mc[data-idx="${idx}"]`);
-      if (el) el.classList.add("on");
-    });
-  }
-  document.getElementById("expFormTitle").textContent = "Editar despesa";
-  document.getElementById("btnAddExpense").textContent = "Desar canvis";
-  document.getElementById("btnCancelEdit").style.display = "";
-  document.getElementById("expenseForm").scrollIntoView({ behavior: "smooth", block: "start" });
+  renderExpenses();
 }
-
 function cancelEdit() {
   editingId = null;
-  document.getElementById("expFormTitle").textContent = "Afegir despesa";
-  document.getElementById("btnAddExpense").textContent = "Afegir despesa";
-  document.getElementById("btnCancelEdit").style.display = "none";
-  document.getElementById("expDesc").value = "";
-  document.getElementById("expAmount").value = "";
-  document.getElementById("expScope").value = "all";
-  onScopeChange();
-  renderMealChecks();
+  renderExpenses();
+}
+async function saveEditExpense(card) {
+  const id = editingId;
+  const e = state.expenses.find(x => x.id === id);
+  if (!e) return;
+  const desc = card.querySelector(".ed-desc").value.trim();
+  const amount = parseFloat(card.querySelector(".ed-amount").value);
+  const payer = card.querySelector(".ed-payer").value;
+  const scope = card.querySelector(".ed-scope").value;
+  if (!desc || !(amount > 0) || !payer) { alert("Omple concepte, import i qui ha pagat."); return; }
+  let meals = [];
+  if (scope === "meals") {
+    meals = [...card.querySelectorAll(".ed-mealchecks .mc.on")].map(el => parseInt(el.dataset.idx));
+    if (meals.length === 0) { alert("Selecciona almenys un àpat."); return; }
+  }
+  if (!await askConfirm(`Desar els canvis de "${desc}"?`)) return;
+  e.desc = desc; e.amount = amount; e.payer = payer; e.scope = scope; e.meals = meals;
+  editingId = null;
+  save(); renderExpenses();
 }
 async function removeExpense(id) {
   const e = state.expenses.find(x => x.id === id);
@@ -744,38 +731,82 @@ function splitExpense(e) {
 function renderExpenses() {
   const c = document.getElementById("expenseList");
   if (state.expenses.length === 0) { c.innerHTML = '<div class="empty">Encara no hi ha despeses.</div>'; return; }
-  c.innerHTML = state.expenses.map(e => {
-    const { shares, totalUnits } = splitExpense(e);
-    const scopeLabel = e.scope === "all"
-      ? "Tot el viatge"
-      : e.meals.map(i => state.meals[i] ? `${state.meals[i].day} · ${state.meals[i].type}` : "?").join(", ");
-    const valid = totalUnits > 0;
-    let rows = state.people
-      .filter(p => shares[p])
-      .map(p => `<tr><td>${esc(p)}</td><td>${eur(shares[p])}</td></tr>`).join("");
-    if (!valid) rows = `<tr><td colspan="2" style="color:var(--red)">Cap persona present en aquests àpats — no es pot repartir.</td></tr>`;
-    return `
-      <div class="expense">
-        <div class="top">
-          <div>
-            <div class="desc">${esc(e.desc)}</div>
-            <div class="meta">Pagat per <b>${esc(e.payer)}</b></div>
-            <div style="margin-top:4px"><span class="tag">${esc(scopeLabel)}</span></div>
-          </div>
-          <div style="text-align:right">
-            <div class="amount">${eur(e.amount)}</div>
-            <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px">
-              <button class="ghost edit-expense" data-id="${e.id}" style="padding:4px 10px;font-size:.8rem">Editar</button>
-              <button class="danger rm-expense" data-id="${e.id}">Esborrar</button>
-            </div>
+  c.innerHTML = state.expenses.map(e =>
+    e.id === editingId ? expenseEditHtml(e) : expenseViewHtml(e)
+  ).join("");
+}
+
+function expenseViewHtml(e) {
+  const { shares, totalUnits } = splitExpense(e);
+  const scopeLabel = e.scope === "all"
+    ? "Tot el viatge"
+    : e.meals.map(i => state.meals[i] ? `${state.meals[i].day} · ${state.meals[i].type}` : "?").join(", ");
+  const valid = totalUnits > 0;
+  let rows = state.people
+    .filter(p => shares[p])
+    .map(p => `<tr><td>${esc(p)}</td><td>${eur(shares[p])}</td></tr>`).join("");
+  if (!valid) rows = `<tr><td colspan="2" style="color:var(--red)">Cap persona present en aquests àpats — no es pot repartir.</td></tr>`;
+  return `
+    <div class="expense">
+      <div class="top">
+        <div>
+          <div class="desc">${esc(e.desc)}</div>
+          <div class="meta">Pagat per <b>${esc(e.payer)}</b></div>
+          <div style="margin-top:4px"><span class="tag">${esc(scopeLabel)}</span></div>
+        </div>
+        <div style="text-align:right">
+          <div class="amount">${eur(e.amount)}</div>
+          <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px">
+            <button class="ghost edit-expense" data-id="${e.id}" style="padding:4px 10px;font-size:.8rem">Editar</button>
+            <button class="danger rm-expense" data-id="${e.id}">Esborrar</button>
           </div>
         </div>
-        <button class="ghost toggle-bd" style="margin-top:8px;font-size:.8rem;padding:5px 10px">Veure repartiment ▾</button>
-        <div class="breakdown">
-          <table>${rows}</table>
+      </div>
+      <button class="ghost toggle-bd" style="margin-top:8px;font-size:.8rem;padding:5px 10px">Veure repartiment ▾</button>
+      <div class="breakdown">
+        <table>${rows}</table>
+      </div>
+    </div>`;
+}
+
+function expenseEditHtml(e) {
+  const payerOpts = state.people.map(p =>
+    `<option value="${escAttr(p)}" ${p===e.payer?'selected':''}>${esc(p)}</option>`).join("");
+  const mealChecks = state.meals.map((mm, idx) =>
+    `<span class="mc ${(e.meals||[]).includes(idx)?'on':''}" data-idx="${idx}">${esc(mm.day)} · ${esc(mm.type)}${state.restaurants[idx]?' 🍽️':''}</span>`
+  ).join("");
+  return `
+    <div class="expense" data-edit-id="${e.id}">
+      <div class="field">
+        <label>Concepte</label>
+        <input type="text" class="ed-desc" value="${escAttr(e.desc)}" style="width:100%">
+      </div>
+      <div class="row">
+        <div class="field" style="flex:1; min-width:110px;">
+          <label>Import (€)</label>
+          <input type="number" class="ed-amount" value="${e.amount}" step="0.01" min="0" style="width:100%">
         </div>
-      </div>`;
-  }).join("");
+        <div class="field" style="flex:1; min-width:130px;">
+          <label>Qui ha pagat</label>
+          <select class="ed-payer" style="width:100%">${payerOpts}</select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Com es reparteix?</label>
+        <select class="ed-scope" style="width:100%">
+          <option value="all" ${e.scope==='all'?'selected':''}>Tot el viatge</option>
+          <option value="meals" ${e.scope==='meals'?'selected':''}>Àpats concrets</option>
+        </select>
+      </div>
+      <div class="field ed-mealfield" style="${e.scope==='meals'?'':'display:none'}">
+        <label>Selecciona els àpats</label>
+        <div class="meal-checks ed-mealchecks">${mealChecks}</div>
+      </div>
+      <div class="row">
+        <button class="ed-save" data-id="${e.id}">Desar canvis</button>
+        <button class="ghost ed-cancel">Cancel·lar</button>
+      </div>
+    </div>`;
 }
 
 // ---------- Comptes ----------
@@ -911,10 +942,22 @@ document.getElementById("expenseList").addEventListener("click", e => {
   if (rm) { removeExpense(rm.dataset.id); return; }
   const ed = e.target.closest(".edit-expense");
   if (ed) { startEditExpense(ed.dataset.id); return; }
+  const sv = e.target.closest(".ed-save");
+  if (sv) { saveEditExpense(sv.closest(".expense")); return; }
+  const cn = e.target.closest(".ed-cancel");
+  if (cn) { cancelEdit(); return; }
+  const mc = e.target.closest(".ed-mealchecks .mc");
+  if (mc) { mc.classList.toggle("on"); return; }
   const tg = e.target.closest(".toggle-bd");
   if (tg) tg.nextElementSibling.classList.toggle("show");
 });
-document.getElementById("btnCancelEdit").addEventListener("click", cancelEdit);
+// Mostrar/amagar selecció d'àpats dins l'edició inline
+document.getElementById("expenseList").addEventListener("change", e => {
+  const sc = e.target.closest(".ed-scope");
+  if (!sc) return;
+  const field = sc.closest(".expense").querySelector(".ed-mealfield");
+  if (field) field.style.display = sc.value === "meals" ? "" : "none";
+});
 
 // ---------- Mode nit ----------
 function applyTheme(dark) {
