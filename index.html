@@ -146,6 +146,20 @@
   .pp-line { font-size: .9rem; padding: 3px 0; }
   .pp-pay b { color: var(--red); }
   .pp-get b { color: var(--green-dark); }
+  .overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    z-index: 100; align-items: center; justify-content: center; padding: 20px;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    background: var(--card); border-radius: 14px; padding: 20px; max-width: 360px;
+    width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,.25);
+  }
+  .modal p { margin: 0 0 18px; font-size: 1rem; }
+  .modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+  .modal-btns button { min-width: 96px; }
+  #confirmOk { background: var(--red); }
+  #confirmOk:hover { background: #a8442f; }
   .meal-checks { display: flex; flex-wrap: wrap; gap: 6px; }
   .meal-checks .mc {
     font-size: .78rem; padding: 5px 9px; border: 1px solid var(--border);
@@ -255,6 +269,17 @@
   </section>
 </main>
 
+<!-- Modal de confirmació -->
+<div id="confirmOverlay" class="overlay">
+  <div class="modal">
+    <p id="confirmMsg"></p>
+    <div class="modal-btns">
+      <button class="ghost" id="confirmCancel">Cancel·lar</button>
+      <button id="confirmOk">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Firebase (sincronització entre dispositius) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -327,6 +352,25 @@ function save() {
 }
 
 function uid() { return Math.random().toString(36).slice(2,10); }
+
+// Diàleg de confirmació propi (retorna una promesa)
+function askConfirm(message) {
+  return new Promise(resolve => {
+    const ov = document.getElementById("confirmOverlay");
+    document.getElementById("confirmMsg").textContent = message;
+    const ok = document.getElementById("confirmOk");
+    const cancel = document.getElementById("confirmCancel");
+    const close = (val) => {
+      ov.classList.remove("show");
+      ok.onclick = null; cancel.onclick = null; ov.onclick = null;
+      resolve(val);
+    };
+    ok.onclick = () => close(true);
+    cancel.onclick = () => close(false);
+    ov.onclick = (e) => { if (e.target === ov) close(false); };
+    ov.classList.add("show");
+  });
+}
 
 // ====================== SINCRONITZACIÓ (Firebase) ======================
 let db = null, cloudRoot = null, useCloud = false, applyingRemote = false, roomId = "";
@@ -486,8 +530,8 @@ function addPerson() {
   cloudInitPersonAttendance(name);
   save(); renderAll();
 }
-function removePerson(p) {
-  if (!confirm(`Treure ${p}? Les despeses que ha pagat es mantindran.`)) return;
+async function removePerson(p) {
+  if (!await askConfirm(`Treure ${p}? Les despeses que ha pagat es mantindran.`)) return;
   state.people = state.people.filter(x => x !== p);
   delete state.attendance[p];
   cloudRemovePersonAttendance(p);
@@ -528,8 +572,11 @@ function addExpense() {
   renderMealChecks();
   save(); renderExpenses();
 }
-function removeExpense(id) {
-  state.expenses = state.expenses.filter(e => e.id !== id);
+async function removeExpense(id) {
+  const e = state.expenses.find(x => x.id === id);
+  const label = e ? `"${e.desc}" (${eur(e.amount)})` : "aquesta despesa";
+  if (!await askConfirm(`Segur que vols esborrar ${label}?`)) return;
+  state.expenses = state.expenses.filter(x => x.id !== id);
   save(); renderExpenses();
 }
 
