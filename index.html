@@ -162,6 +162,7 @@
   }
   table.att td.restlabel { background: var(--rest-bg); color: var(--rest-text); font-weight: 600; }
   table.att th.meal.is-rest { background: var(--rest-head); color: var(--rest-head-text); }
+  table.att td.rest-col { background: var(--rest-bg); }
   .expense {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -546,7 +547,7 @@ function renderAttendance() {
   let restRow = '<tr><td class="name restlabel">🍽️ Al restaurant?</td>';
   m.forEach((mm, idx) => {
     const on = state.restaurants[idx];
-    restRow += `<td class="${on?'present':''}"><span class="rchk ${on?'on':''}" data-ri="${idx}" title="Marca si aquest àpat es fa al restaurant"></span></td>`;
+    restRow += `<td class="${on?'rest-col':''}"><span class="rchk ${on?'on':''}" data-ri="${idx}" title="Marca si aquest àpat es fa al restaurant"></span></td>`;
   });
   restRow += '<td class="total"></td></tr>';
 
@@ -557,7 +558,8 @@ function renderAttendance() {
     m.forEach((mm, idx) => {
       const on = state.attendance[p] && state.attendance[p][idx];
       if (on) count++;
-      body += `<td class="${on?'present':''}"><span class="chk ${on?'on':''}" data-pi="${pi}" data-mi="${idx}"></span></td>`;
+      const cls = [on?'present':'', state.restaurants[idx]?'rest-col':''].filter(Boolean).join(' ');
+      body += `<td class="${cls}"><span class="chk ${on?'on':''}" data-pi="${pi}" data-mi="${idx}"></span></td>`;
     });
     body += `<td class="total">${count}</td></tr>`;
   });
@@ -566,7 +568,7 @@ function renderAttendance() {
   m.forEach((mm, idx) => {
     let c = 0;
     state.people.forEach(p => { if (state.attendance[p] && state.attendance[p][idx]) c++; });
-    totRow += `<td class="total">${c}</td>`;
+    totRow += `<td class="total${state.restaurants[idx]?' rest-col':''}">${c}</td>`;
   });
   totRow += '<td class="total"></td></tr>';
 
@@ -912,8 +914,7 @@ function applyTheme(dark) {
 (function initTheme() {
   let saved = null;
   try { saved = localStorage.getItem("cadaques-theme"); } catch(e) {}
-  const dark = saved ? saved === "dark"
-    : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const dark = saved ? saved === "dark" : true; // mode nit per defecte
   applyTheme(dark);
 })();
 document.getElementById("themeToggle").addEventListener("click", () => {
