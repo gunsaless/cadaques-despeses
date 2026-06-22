@@ -207,6 +207,7 @@
   .pp-line { font-size: .9rem; padding: 3px 0; }
   .pp-pay b { color: var(--red); }
   .pp-get b { color: var(--accent); }
+  .pp-line .mark-paid { padding: 3px 8px; font-size: .72rem; margin-left: 6px; vertical-align: middle; }
   .overlay {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
     z-index: 100; align-items: center; justify-content: center; padding: 20px;
@@ -331,16 +332,16 @@
       <p class="small">Cost mitjà aproximat de cada franja per persona.</p>
       <div id="byCategory"></div>
     </div>
+    <details class="card">
+      <summary><h2 style="display:inline">Balanç total per persona</h2></summary>
+      <p class="small">Positiu = li deuen diners. Negatiu = ha de pagar.</p>
+      <div id="balances"></div>
+    </details>
     <div class="card">
       <h2>Resum per persona</h2>
-      <p class="small">Què ha de pagar i a qui, i qui li ha de pagar a ell/a.</p>
+      <p class="small">Què ha de pagar i a qui (marca'l com a pagat quan s'hagi fet), i qui li ha de pagar a ell/a.</p>
       <div id="perPerson"></div>
     </div>
-    <details class="card">
-      <summary><h2 style="display:inline">Com saldar els comptes</h2></summary>
-      <p class="small">Pagaments mínims perquè tothom quedi en paus.</p>
-      <div id="settlements"></div>
-    </details>
   </section>
 </main>
 
@@ -1098,33 +1099,40 @@ function renderComptes() {
     if (debtors[i].v < 0.005) i++;
     if (creditors[j].v < 0.005) j++;
   }
-  const sdiv = document.getElementById("settlements");
-  const pending = tx.length
-    ? tx.map(t => `<div class="settle"><span><b>${esc(t.from)}</b> paga <b>${eur(t.amt)}</b> a <b>${esc(t.to)}</b></span>` +
-        `<button class="mark-paid" data-from="${escAttr(t.from)}" data-to="${escAttr(t.to)}" data-amt="${t.amt.toFixed(2)}">Marcar pagat</button></div>`).join("")
-    : '<div class="empty">Tot quadrat! No hi ha res pendent.</div>';
-  const done = state.settlements.length
-    ? `<h3 style="margin-top:14px">Pagaments fets</h3>` + state.settlements.map(s =>
-        `<div class="settle done"><span>✅ <b>${esc(s.from)}</b> ha pagat <b>${eur(s.amount)}</b> a <b>${esc(s.to)}</b></span>` +
-        `<button class="ghost undo-paid" data-id="${s.id}">Desfer</button></div>`).join("")
-    : "";
-  sdiv.innerHTML = pending + done;
+  // Balanç total per persona (desplegable)
+  const bdiv = document.getElementById("balances");
+  bdiv.innerHTML = state.people.map(p => {
+    const v = bal[p] || 0;
+    const cls = v > 0.005 ? "pos" : (v < -0.005 ? "neg" : "");
+    const txt = v > 0.005 ? `+${eur(v)} (li deuen)` : (v < -0.005 ? `${eur(v)} (ha de pagar)` : "0 €");
+    return `<div class="balance-row">
+      <span>${esc(p)}<div class="small">Pagat ${eur(paid[p]||0)} · Li toca ${eur(owed[p]||0)}</div></span>
+      <span class="${cls}">${txt}</span></div>`;
+  }).join("");
 
-  // Resum per persona (agrupant les transaccions)
+  // Resum per persona (agrupant les transaccions) + marcar com a pagat
   const pdiv = document.getElementById("perPerson");
-  if (!tx.length) {
-    pdiv.innerHTML = '<div class="empty">Tot quadrat! No hi ha res a pagar.</div>';
-  } else {
+  let html = "";
+  if (tx.length) {
     const involved = state.people.filter(p => tx.some(t => t.from === p || t.to === p));
-    pdiv.innerHTML = involved.map(p => {
+    html += involved.map(p => {
       const pays = tx.filter(t => t.from === p);
       const gets = tx.filter(t => t.to === p);
       let lines = "";
-      pays.forEach(t => lines += `<div class="pp-line pp-pay">➡️ Has de pagar <b>${eur(t.amt)}</b> a <b>${esc(t.to)}</b></div>`);
+      pays.forEach(t => lines += `<div class="pp-line pp-pay">➡️ Has de pagar <b>${eur(t.amt)}</b> a <b>${esc(t.to)}</b>` +
+        ` <button class="mark-paid" data-from="${escAttr(t.from)}" data-to="${escAttr(t.to)}" data-amt="${t.amt.toFixed(2)}">Marcar pagat</button></div>`);
       gets.forEach(t => lines += `<div class="pp-line pp-get">⬅️ <b>${esc(t.from)}</b> t'ha de pagar <b>${eur(t.amt)}</b></div>`);
       return `<div class="pp-card"><div class="pp-name">${esc(p)}</div>${lines}</div>`;
     }).join("");
+  } else {
+    html += '<div class="empty">Tot quadrat! No hi ha res pendent.</div>';
   }
+  if (state.settlements.length) {
+    html += `<h3 style="margin-top:14px">Pagaments fets</h3>` + state.settlements.map(s =>
+      `<div class="settle done"><span>✅ <b>${esc(s.from)}</b> ha pagat <b>${eur(s.amount)}</b> a <b>${esc(s.to)}</b></span>` +
+      `<button class="ghost undo-paid" data-id="${s.id}">Desfer</button></div>`).join("");
+  }
+  pdiv.innerHTML = html;
 }
 
 // ---------- Utils ----------
@@ -1294,7 +1302,7 @@ document.getElementById("expenseList").addEventListener("click", e => {
   const tg = e.target.closest(".toggle-bd");
   if (tg) tg.nextElementSibling.classList.toggle("show");
 });
-document.getElementById("settlements").addEventListener("click", e => {
+document.getElementById("perPerson").addEventListener("click", e => {
   const mp = e.target.closest(".mark-paid");
   if (mp) { markPaid(mp.dataset.from, mp.dataset.to, parseFloat(mp.dataset.amt)); return; }
   const up = e.target.closest(".undo-paid");
