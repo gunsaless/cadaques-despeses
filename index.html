@@ -680,8 +680,13 @@ function renderAttendance() {
   dayRow += '<th class="total" rowspan="2">Àpats</th></tr>';
   let mealRow = '<tr>';
   m.forEach((mm, idx) => {
-    const title = mm.title ? `<div class="meal-title">${esc(mm.title)}</div>` : "";
-    mealRow += `<th class="meal mealhead${state.restaurants[idx]?' is-rest':''}" data-mealidx="${idx}" title="Clica per posar un títol a l'àpat">${esc(mm.type)}${state.restaurants[idx]?' 🍽️':''}${title}</th>`;
+    const isRest = state.restaurants[idx];
+    const title = (isRest && mm.title) ? `<div class="meal-title">${esc(mm.title)}</div>` : "";
+    if (isRest) {
+      mealRow += `<th class="meal is-rest mealhead" data-mealidx="${idx}" title="Clica per posar un títol a l'àpat">${esc(mm.type)} 🍽️ ✏️${title}</th>`;
+    } else {
+      mealRow += `<th class="meal">${esc(mm.type)}</th>`;
+    }
   });
   mealRow += '</tr>';
 
@@ -747,7 +752,7 @@ document.getElementById("attTable").addEventListener("click", (ev) => {
 });
 
 async function setMealTitle(idx) {
-  if (isNaN(idx) || !state.meals[idx]) return;
+  if (isNaN(idx) || !state.meals[idx] || !state.restaurants[idx]) return;
   const m = state.meals[idx];
   const title = await askText(`Títol per a ${m.day} · ${m.type} (buit per treure'l):`, m.title || "");
   if (title === null) return;
@@ -812,8 +817,10 @@ function onScopeChange() {
 }
 function mealChipInner(idx) {
   const mm = state.meals[idx];
-  const title = mm.title ? ` · <i>${esc(mm.title)}</i>` : "";
-  return `${esc(mm.day)} · ${esc(mm.type)}${state.restaurants[idx]?' 🍽️':''}${title} <span class="mc-edit" data-idx="${idx}" title="Posar/editar títol">✏️</span>`;
+  const isRest = state.restaurants[idx];
+  const title = (isRest && mm.title) ? ` · <i>${esc(mm.title)}</i>` : "";
+  const editBtn = isRest ? ` <span class="mc-edit" data-idx="${idx}" title="Posar/editar títol">✏️</span>` : "";
+  return `${esc(mm.day)} · ${esc(mm.type)}${isRest?' 🍽️':''}${title}${editBtn}`;
 }
 function renderMealChecks() {
   const c = document.getElementById("expMealChecks");
