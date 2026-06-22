@@ -230,6 +230,9 @@
     border-radius: 20px; cursor: pointer; user-select: none;
   }
   .meal-checks .mc.on { background: var(--green); color: #fff; border-color: var(--green); }
+  .meal-checks .mc i { font-style: italic; opacity: .9; }
+  .meal-checks .mc-edit { margin-left: 4px; cursor: pointer; opacity: .8; }
+  .meal-checks .mc-edit:hover { opacity: 1; }
   .small { font-size: .82rem; color: var(--muted); }
   .pill-people { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
   .pill { background: var(--bg); border:1px solid var(--border); border-radius:20px; padding:5px 10px; font-size:.85rem; display:flex; align-items:center; gap:6px; }
@@ -751,6 +754,8 @@ async function setMealTitle(idx) {
   m.title = title.trim();
   save();
   renderAttendance();
+  // Refresca els xips d'àpat visibles (sense perdre la selecció)
+  document.querySelectorAll(`.mc[data-idx="${idx}"]`).forEach(el => { el.innerHTML = mealChipInner(idx); });
   if (document.querySelector('.tab[data-tab="comptes"]').classList.contains("active")) renderComptes();
 }
 
@@ -805,10 +810,15 @@ function onScopeChange() {
   document.getElementById("mealSelectField").style.display = scope === "meals" ? "block" : "none";
   document.getElementById("peopleSelectField").style.display = scope === "people" ? "block" : "none";
 }
+function mealChipInner(idx) {
+  const mm = state.meals[idx];
+  const title = mm.title ? ` · <i>${esc(mm.title)}</i>` : "";
+  return `${esc(mm.day)} · ${esc(mm.type)}${state.restaurants[idx]?' 🍽️':''}${title} <span class="mc-edit" data-idx="${idx}" title="Posar/editar títol">✏️</span>`;
+}
 function renderMealChecks() {
   const c = document.getElementById("expMealChecks");
   c.innerHTML = state.meals.map((mm, idx) =>
-    `<span class="mc" data-idx="${idx}">${esc(mm.day)} · ${esc(mm.type)}${state.restaurants[idx]?' 🍽️':''}</span>`
+    `<span class="mc" data-idx="${idx}">${mealChipInner(idx)}</span>`
   ).join("");
 }
 function renderPeopleChecks() {
@@ -969,7 +979,7 @@ function expenseEditHtml(e) {
   const payerOpts = state.people.map(p =>
     `<option value="${escAttr(p)}" ${p===e.payer?'selected':''}>${esc(p)}</option>`).join("");
   const mealChecks = state.meals.map((mm, idx) =>
-    `<span class="mc ${(e.meals||[]).includes(idx)?'on':''}" data-idx="${idx}">${esc(mm.day)} · ${esc(mm.type)}${state.restaurants[idx]?' 🍽️':''}</span>`
+    `<span class="mc ${(e.meals||[]).includes(idx)?'on':''}" data-idx="${idx}">${mealChipInner(idx)}</span>`
   ).join("");
   const peopleChecks = state.people.map(p =>
     `<span class="mc ${(e.people||[]).includes(p)?'on':''}" data-person="${escAttr(p)}">${esc(p)}</span>`
@@ -1310,6 +1320,8 @@ document.getElementById("peoplePills").addEventListener("click", e => {
   if (b) removePerson(state.people[parseInt(b.dataset.pi)]);
 });
 document.getElementById("expMealChecks").addEventListener("click", e => {
+  const edit = e.target.closest(".mc-edit");
+  if (edit) { setMealTitle(parseInt(edit.dataset.idx)); return; }
   const mc = e.target.closest(".mc");
   if (mc) mc.classList.toggle("on");
 });
@@ -1326,6 +1338,8 @@ document.getElementById("expenseList").addEventListener("click", e => {
   if (sv) { saveEditExpense(sv.closest(".expense")); return; }
   const cn = e.target.closest(".ed-cancel");
   if (cn) { cancelEdit(); return; }
+  const medit = e.target.closest(".ed-mealchecks .mc-edit");
+  if (medit) { setMealTitle(parseInt(medit.dataset.idx)); return; }
   const mc = e.target.closest(".ed-mealchecks .mc, .ed-peoplechecks .mc");
   if (mc) { mc.classList.toggle("on"); return; }
   const tg = e.target.closest(".toggle-bd");
