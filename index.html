@@ -1100,7 +1100,7 @@ function renderComptes() {
       const dt = m ? `${m.day} · ${m.type}` : "Restaurant";
       const label = isRest ? (m && m.title ? m.title : dt) : (m ? m.type : "?");
       const note = isRest ? (m && m.title ? dt : "factura del restaurant") : null;
-      if (!cat[key]) cat[key] = { label, note, total: 0, days: new Set(), isRest };
+      if (!cat[key]) cat[key] = { label, note, total: 0, days: new Set(), isRest, idx: isRest ? idx : null };
       cat[key].total += portion;
       cat[key].days.add(idx);
     });
@@ -1109,12 +1109,13 @@ function renderComptes() {
     .map(v => {
       let personMeals = 0;
       v.days.forEach(idx => personMeals += attOf(idx));
-      return { label: v.label, note: v.note, isRest: v.isRest, perPerson: personMeals ? v.total / personMeals : 0, n: v.days.size };
+      return { label: v.label, note: v.note, isRest: v.isRest, idx: v.idx, perPerson: personMeals ? v.total / personMeals : 0, n: v.days.size };
     })
     .sort((a,b) => b.perPerson - a.perPerson);
   const rowHtml = c => {
     const note = c.isRest ? (c.note || "factura del restaurant") : `mitjana de ${c.n} ${c.n===1?'dia':'dies'}`;
-    return `<div class="balance-row"><span>${esc(c.label)}<div class="small">${esc(note)}</div></span><span class="amount">${eur(c.perPerson)}/persona</span></div>`;
+    const edit = c.isRest ? ` <span class="cat-edit" data-mealidx="${c.idx}" title="Editar el nom del restaurant">✏️</span>` : "";
+    return `<div class="balance-row"><span>${esc(c.label)}${edit}<div class="small">${esc(note)}</div></span><span class="amount">${eur(c.perPerson)}/persona</span></div>`;
   };
   const homeEntries = catEntries.filter(c => !c.isRest);
   const restEntries = catEntries.filter(c => c.isRest);
@@ -1351,6 +1352,10 @@ document.getElementById("expenseList").addEventListener("click", e => {
   if (mc) { mc.classList.toggle("on"); return; }
   const tg = e.target.closest(".toggle-bd");
   if (tg) tg.nextElementSibling.classList.toggle("show");
+});
+document.getElementById("byCategory").addEventListener("click", e => {
+  const ed = e.target.closest(".cat-edit");
+  if (ed) setMealTitle(parseInt(ed.dataset.mealidx));
 });
 document.getElementById("perPerson").addEventListener("click", e => {
   const mp = e.target.closest(".mark-paid");
