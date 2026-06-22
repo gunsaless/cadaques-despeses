@@ -1038,8 +1038,15 @@ function renderComptes() {
     <div class="balance-row"><span>Despesa total</span><span class="amount">${eur(total)}</span></div>
     <div class="balance-row"><span>Nombre de despeses</span><span>${state.expenses.length}</span></div>`;
 
-  // Cost per franja: reparteix cada despesa entre els àpats i fa la mitjana per dia i per persona
-  const cat = {}; // key -> { total, days:Set(idx), att }
+  // Assistències per àpat (persona × àpat), comptades un sol cop
+  function attOf(idx) {
+    let a = 0;
+    state.people.forEach(p => { if (state.attendance[p] && state.attendance[p][idx]) a++; });
+    return a;
+  }
+  // Cost per franja: els àpats normals s'agrupen per tipus i es fa la mitjana per persona;
+  // cada àpat de restaurant té la seva pròpia entrada (cost per persona d'aquell àpat concret).
+  const cat = {}; // key -> { label, total, days:Set(idx), isRest }
   state.expenses.forEach(e => {
     const idxs = e.scope === "all"
       ? state.meals.map((_,i)=>i).filter(i => !state.restaurants[i])
@@ -1047,33 +1054,31 @@ function renderComptes() {
     const { perUnit, totalUnits } = splitExpense(e);
     if (totalUnits === 0) return;
     idxs.forEach(idx => {
-      let att = 0;
-      state.people.forEach(p => { if (state.attendance[p] && state.attendance[p][idx]) att++; });
+      const att = attOf(idx);
       if (att === 0) return;
       const portion = perUnit * mealWeight(idx) * att;
-      const key = state.restaurants[idx] ? "🍽️ Restaurant" : (state.meals[idx] ? state.meals[idx].type : "?");
-      if (!cat[key]) cat[key] = { total: 0, days: new Set() };
+      const m = state.meals[idx];
+      const isRest = state.restaurants[idx];
+      const key = isRest ? ("rest-" + idx) : (m ? m.type : "?");
+      const label = isRest ? ("🍽️ " + (m ? `${m.day} · ${m.type}` : "Restaurant")) : (m ? m.type : "?");
+      if (!cat[key]) cat[key] = { label, total: 0, days: new Set(), isRest };
       cat[key].total += portion;
       cat[key].days.add(idx);
     });
   });
-  // Assistències per àpat (persona × àpat), comptades un sol cop
-  function attOf(idx) {
-    let a = 0;
-    state.people.forEach(p => { if (state.attendance[p] && state.attendance[p][idx]) a++; });
-    return a;
-  }
-  const catEntries = Object.entries(cat)
-    .map(([k, v]) => {
+  const catEntries = Object.values(cat)
+    .map(v => {
       let personMeals = 0;
       v.days.forEach(idx => personMeals += attOf(idx));
-      return { k, perPerson: personMeals ? v.total / personMeals : 0, n: v.days.size };
+      return { label: v.label, isRest: v.isRest, perPerson: personMeals ? v.total / personMeals : 0, n: v.days.size };
     })
     .sort((a,b) => b.perPerson - a.perPerson);
   const cdiv = document.getElementById("byCategory");
   cdiv.innerHTML = catEntries.length
-    ? catEntries.map(c =>
-        `<div class="balance-row"><span>${esc(c.k)}<div class="small">mitjana de ${c.n} ${c.n===1?'dia':'dies'}</div></span><span class="amount">${eur(c.perPerson)}/persona</span></div>`).join("")
+    ? catEntries.map(c => {
+        const note = c.isRest ? "factura del restaurant" : `mitjana de ${c.n} ${c.n===1?'dia':'dies'}`;
+        return `<div class="balance-row"><span>${esc(c.label)}<div class="small">${note}</div></span><span class="amount">${eur(c.perPerson)}/persona</span></div>`;
+      }).join("")
     : '<div class="empty">Encara no hi ha despeses.</div>';
 
   // saldar (greedy)
