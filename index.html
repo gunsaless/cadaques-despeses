@@ -137,6 +137,8 @@
   table.att td:has(.chk) { padding: 7px 11px; }
   table.att th.day { background: var(--green-dark); color: #fff; }
   table.att th.meal { background: var(--green-light); color: var(--accent); font-weight: 600; }
+  table.att th.mealhead { cursor: pointer; }
+  table.att .meal-title { font-size: .68rem; font-weight: 600; color: var(--text); opacity: .85; margin-top: 2px; white-space: normal; max-width: 110px; }
   table.att td.name, table.att th.name { text-align: left; font-weight: 600; position: sticky; left: 0; background: var(--card); z-index: 2; }
   table.att th.name { background: var(--green-dark); color:#fff; }
   table.att td.total, table.att th.total { font-weight: 700; background: var(--bg); }
@@ -674,7 +676,10 @@ function renderAttendance() {
   }
   dayRow += '<th class="total" rowspan="2">Àpats</th></tr>';
   let mealRow = '<tr>';
-  m.forEach((mm, idx) => mealRow += `<th class="meal${state.restaurants[idx]?' is-rest':''}">${mm.type}${state.restaurants[idx]?' 🍽️':''}</th>`);
+  m.forEach((mm, idx) => {
+    const title = mm.title ? `<div class="meal-title">${esc(mm.title)}</div>` : "";
+    mealRow += `<th class="meal mealhead${state.restaurants[idx]?' is-rest':''}" data-mealidx="${idx}" title="Clica per posar un títol a l'àpat">${esc(mm.type)}${state.restaurants[idx]?' 🍽️':''}${title}</th>`;
+  });
   mealRow += '</tr>';
 
   // Fila per marcar àpats al restaurant (exclosos del repartiment general)
@@ -711,13 +716,15 @@ function renderAttendance() {
 
 // Event delegation: un sol listener per a tota la taula
 document.getElementById("attTable").addEventListener("click", (ev) => {
+  const head = ev.target.closest(".mealhead");
+  if (head) { setMealTitle(parseInt(head.dataset.mealidx)); return; }
   const rcell = ev.target.closest(".rchk");
   if (rcell) {
     const ri = parseInt(rcell.dataset.ri);
     if (isNaN(ri)) return;
     const val = !state.restaurants[ri];
     state.restaurants[ri] = val;
-    localStorage.setItem("cadaques2026", JSON.stringify(state));
+    localStorage.setItem(eventKey(currentEventId), JSON.stringify(state));
     cloudSetRestaurant(ri, val);
     renderAttendance();
     renderMealChecks();
@@ -731,10 +738,21 @@ document.getElementById("attTable").addEventListener("click", (ev) => {
   if (!state.attendance[p]) state.attendance[p] = state.meals.map(() => false);
   const val = !state.attendance[p][idx];
   state.attendance[p][idx] = val;
-  localStorage.setItem("cadaques2026", JSON.stringify(state));
+  localStorage.setItem(eventKey(currentEventId), JSON.stringify(state));
   cloudSetAttendance(p, idx, val);
   renderAttendance();
 });
+
+async function setMealTitle(idx) {
+  if (isNaN(idx) || !state.meals[idx]) return;
+  const m = state.meals[idx];
+  const title = await askText(`Títol per a ${m.day} · ${m.type} (buit per treure'l):`, m.title || "");
+  if (title === null) return;
+  m.title = title.trim();
+  save();
+  renderAttendance();
+  if (document.querySelector('.tab[data-tab="comptes"]').classList.contains("active")) renderComptes();
+}
 
 function renderPeople() {
   const c = document.getElementById("peoplePills");
@@ -1062,8 +1080,10 @@ function renderComptes() {
       const m = state.meals[idx];
       const isRest = state.restaurants[idx];
       const key = isRest ? ("rest-" + idx) : (m ? m.type : "?");
-      const label = isRest ? ("🍽️ " + (m ? `${m.day} · ${m.type}` : "Restaurant")) : (m ? m.type : "?");
-      if (!cat[key]) cat[key] = { label, total: 0, days: new Set(), isRest };
+      const dt = m ? `${m.day} · ${m.type}` : "Restaurant";
+      const label = isRest ? (m && m.title ? m.title : dt) : (m ? m.type : "?");
+      const note = isRest ? (m && m.title ? dt : "factura del restaurant") : null;
+      if (!cat[key]) cat[key] = { label, note, total: 0, days: new Set(), isRest };
       cat[key].total += portion;
       cat[key].days.add(idx);
     });
@@ -1072,16 +1092,24 @@ function renderComptes() {
     .map(v => {
       let personMeals = 0;
       v.days.forEach(idx => personMeals += attOf(idx));
-      return { label: v.label, isRest: v.isRest, perPerson: personMeals ? v.total / personMeals : 0, n: v.days.size };
+      return { label: v.label, note: v.note, isRest: v.isRest, perPerson: personMeals ? v.total / personMeals : 0, n: v.days.size };
     })
     .sort((a,b) => b.perPerson - a.perPerson);
+  const rowHtml = c => {
+    const note = c.isRest ? (c.note || "factura del restaurant") : `mitjana de ${c.n} ${c.n===1?'dia':'dies'}`;
+    return `<div class="balance-row"><span>${esc(c.label)}<div class="small">${esc(note)}</div></span><span class="amount">${eur(c.perPerson)}/persona</span></div>`;
+  };
+  const homeEntries = catEntries.filter(c => !c.isRest);
+  const restEntries = catEntries.filter(c => c.isRest);
   const cdiv = document.getElementById("byCategory");
-  cdiv.innerHTML = catEntries.length
-    ? catEntries.map(c => {
-        const note = c.isRest ? "factura del restaurant" : `mitjana de ${c.n} ${c.n===1?'dia':'dies'}`;
-        return `<div class="balance-row"><span>${esc(c.label)}<div class="small">${note}</div></span><span class="amount">${eur(c.perPerson)}/persona</span></div>`;
-      }).join("")
-    : '<div class="empty">Encara no hi ha despeses.</div>';
+  if (!catEntries.length) {
+    cdiv.innerHTML = '<div class="empty">Encara no hi ha despeses.</div>';
+  } else {
+    let h = "";
+    if (homeEntries.length) h += `<h3>🏠 Àpats a casa</h3>` + homeEntries.map(rowHtml).join("");
+    if (restEntries.length) h += `<h3 style="margin-top:14px">🍽️ Restaurants</h3>` + restEntries.map(rowHtml).join("");
+    cdiv.innerHTML = h;
+  }
 
   // saldar (greedy)
   const creditors = [], debtors = [];
