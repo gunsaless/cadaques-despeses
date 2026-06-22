@@ -582,7 +582,7 @@ function initCloud() {
   // Índex d'esdeveniments (per al selector)
   db.ref("cadaques/_index").on("value", (snap) => {
     eventsIndex = snap.val() || {};
-    if (!eventsIndex[currentEventId]) {
+    if (currentEventId && !eventsIndex[currentEventId]) {
       eventsIndex[currentEventId] = { name: state.name || currentEventId };
       db.ref("cadaques/_index/" + currentEventId).set(eventsIndex[currentEventId]);
     }
@@ -1299,16 +1299,24 @@ async function deleteCurrentEvent() {
   if (ids.length <= 1) { alert("No pots esborrar l'únic esdeveniment."); return; }
   if (!await askConfirm(`Esborrar l'esdeveniment "${state.name}" i totes les seves dades? No es pot desfer.`)) return;
   const delId = currentEventId;
-  delete eventsIndex[delId];
-  localStorage.removeItem(eventKey(delId));
+  const nextId = Object.keys(eventsIndex).find(id => id !== delId);
+  // Desvincula el listener de l'esdeveniment actual perquè no el torni a crear
+  if (useCloud && cloudRoot && eventValueCb) { cloudRoot.off("value", eventValueCb); eventValueCb = null; }
+  // Esborra del núvol
   if (useCloud) {
     db.ref("cadaques/_index/" + delId).remove();
     db.ref("cadaques/" + delId).remove();
   }
-  const nextId = Object.keys(eventsIndex)[0];
+  // Esborra en local
+  delete eventsIndex[delId];
+  localStorage.removeItem(eventKey(delId));
   localStorage.setItem("cad-index", JSON.stringify(eventsIndex));
-  currentEventId = "";       // força el switch
-  switchEvent(nextId);
+  // Canvia al següent SENSE desar (ni recrear) l'esdeveniment eliminat
+  currentEventId = nextId;
+  localStorage.setItem("cad-current", nextId);
+  state = loadLocalEvent(nextId) || normalize(structuredClone(DEFAULT));
+  if (useCloud) subscribeEvent(nextId);
+  applyEventToUI();
 }
 
 // ---------- Listeners (event delegation) ----------
