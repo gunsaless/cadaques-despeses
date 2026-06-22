@@ -996,7 +996,8 @@ function expenseEditHtml(e) {
 }
 
 // ---------- Pagaments fets ----------
-function markPaid(from, to, amt) {
+async function markPaid(from, to, amt) {
+  if (!await askConfirm(`Confirmes que ${from} ha pagat ${eur(amt)} a ${to}?`)) return;
   state.settlements.push({ id: uid(), from, to, amount: Math.round(amt * 100) / 100 });
   save(); renderComptes();
 }
