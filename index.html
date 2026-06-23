@@ -847,7 +847,7 @@ function addExpense() {
     people = [...document.querySelectorAll("#expPeopleChecks .mc.on")].map(e => e.dataset.person);
     if (people.length === 0) { alert("Selecciona almenys una persona."); return; }
   }
-  state.expenses.push({ id: uid(), desc, amount, payer, scope, meals, people });
+  state.expenses.push({ id: uid(), desc, amount, payer, scope, meals, people, ts: Date.now() });
   document.getElementById("expDesc").value = "";
   document.getElementById("expAmount").value = "";
   document.getElementById("expScope").value = "all";
@@ -938,7 +938,8 @@ function splitExpense(e) {
 function renderExpenses() {
   const c = document.getElementById("expenseList");
   if (state.expenses.length === 0) { c.innerHTML = '<div class="empty">Encara no hi ha despeses.</div>'; return; }
-  c.innerHTML = state.expenses.map(e =>
+  const ordered = state.expenses.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  c.innerHTML = ordered.map(e =>
     e.id === editingId ? expenseEditHtml(e) : expenseViewHtml(e)
   ).join("");
 }
