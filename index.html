@@ -566,6 +566,11 @@ function askText(message, initial) {
 // ====================== SINCRONITZACIÓ (Firebase) ======================
 let db = null, cloudRoot = null, useCloud = false, applyingRemote = false;
 let eventValueCb = null;
+const pendingWriteIds = new Set(); // ids de despeses/pagaments locals pendents de confirmar al núvol
+function markPending(id) {
+  pendingWriteIds.add(id);
+  setTimeout(() => pendingWriteIds.delete(id), 6000); // ja segur que el núvol ho té
+}
 
 function slug(s) { return String(s).replace(/[.#$\[\]\/]/g, "_"); }
 
@@ -626,8 +631,19 @@ function subscribeEvent(id) {
       state.attendance[p] = state.meals.map((_, i) => !!arr[i]);
     });
     state.restaurants = state.meals.map((_, i) => !!(v.restaurants && v.restaurants[i]));
-    state.expenses = v.expenses ? Object.values(v.expenses) : [];
-    state.settlements = v.settlements ? Object.values(v.settlements) : [];
+    // Fusiona per id preservant els canvis locals encara pendents de confirmar al núvol.
+    // Firebase dispara l'eco sincrònicament amb l'escriptura local, i a sobre poden
+    // arribar ecos antics (d'altres canvis) que no porten la despesa nova: amb això
+    // ens assegurem que no desaparegui ni es reverteixi mentre està pendent.
+    const mergePending = (cloudArr, localArr) => {
+      const localById = new Map(localArr.map(x => [x.id, x]));
+      const cloudIds = new Set(cloudArr.map(x => x.id));
+      const merged = cloudArr.map(x => (pendingWriteIds.has(x.id) && localById.has(x.id)) ? localById.get(x.id) : x);
+      localArr.forEach(x => { if (pendingWriteIds.has(x.id) && !cloudIds.has(x.id)) merged.push(x); });
+      return merged;
+    };
+    state.expenses = mergePending(v.expenses ? Object.values(v.expenses) : [], state.expenses);
+    state.settlements = mergePending(v.settlements ? Object.values(v.settlements) : [], state.settlements);
     localStorage.setItem(eventKey(id), JSON.stringify(state));
     applyEventToUI();
     setSyncBadge("🟢 Sincronitzat", true);
@@ -861,7 +877,9 @@ function addExpense() {
     people = [...document.querySelectorAll("#expPeopleChecks .mc.on")].map(e => e.dataset.person);
     if (people.length === 0) { alert("Selecciona almenys una persona."); return; }
   }
-  state.expenses.push({ id: uid(), desc, amount, payer, scope, meals, people, ts: Date.now() });
+  const newId = uid();
+  markPending(newId);
+  state.expenses.push({ id: newId, desc, amount, payer, scope, meals, people, ts: Date.now() });
   document.getElementById("expDesc").value = "";
   document.getElementById("expAmount").value = "";
   document.getElementById("expScope").value = "all";
@@ -901,6 +919,7 @@ async function saveEditExpense(card) {
   }
   if (!await askConfirm(`Desar els canvis de "${desc}"?`)) return;
   e.desc = desc; e.amount = amount; e.payer = payer; e.scope = scope; e.meals = meals; e.people = people;
+  markPending(e.id);
   editingId = null;
   save(); renderExpenses();
   showToast(`✅ Despesa actualitzada: ${desc}`);
@@ -1046,7 +1065,9 @@ function expenseEditHtml(e) {
 // ---------- Pagaments fets ----------
 async function markPaid(from, to, amt) {
   if (!await askConfirm(`Confirmes que ${from} ha pagat ${eur(amt)} a ${to}?`)) return;
-  state.settlements.push({ id: uid(), from, to, amount: Math.round(amt * 100) / 100 });
+  const sid = uid();
+  markPending(sid);
+  state.settlements.push({ id: sid, from, to, amount: Math.round(amt * 100) / 100 });
   save(); renderComptes();
 }
 async function undoPaid(id) {
