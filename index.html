@@ -592,9 +592,11 @@ function initCloud() {
   // Índex d'esdeveniments (per al selector)
   db.ref("cadaques/_index").on("value", (snap) => {
     eventsIndex = snap.val() || {};
-    if (currentEventId && !eventsIndex[currentEventId]) {
-      eventsIndex[currentEventId] = { name: state.name || currentEventId };
-      db.ref("cadaques/_index/" + currentEventId).set(eventsIndex[currentEventId]);
+    // Només auto-registrem l'esdeveniment per defecte. Els altres es registren
+    // explícitament en crear-los; així un esdeveniment esborrat no es recrea sol.
+    if (currentEventId === LEGACY_ID && !eventsIndex[LEGACY_ID]) {
+      eventsIndex[LEGACY_ID] = { name: state.name || "Cadaqués 2026" };
+      db.ref("cadaques/_index/" + LEGACY_ID).set(eventsIndex[LEGACY_ID]);
     }
     localStorage.setItem("cad-index", JSON.stringify(eventsIndex));
     renderEventPicker();
@@ -609,7 +611,9 @@ function subscribeEvent(id) {
   cloudRoot = db.ref("cadaques/" + id);
   eventValueCb = cloudRoot.on("value", (snap) => {
     const v = snap.val();
-    if (!v || !v.people) { seedCloud(); return; }
+    // Només auto-creem (seed) l'esdeveniment per defecte. Per a la resta, un núvol
+    // buit vol dir que s'està creant en un altre lloc o que s'ha esborrat: NO el recreem.
+    if (!v || !v.people) { if (id === LEGACY_ID) seedCloud(); return; }
     applyingRemote = true;
     state.name = v.name || eventsIndex[id]?.name || state.name;
     state.meals = Array.isArray(v.meals) ? v.meals : (id === LEGACY_ID ? structuredClone(DEFAULT.meals) : []);
