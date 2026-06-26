@@ -419,6 +419,7 @@
 <!-- Firebase (sincronització entre dispositius) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
 <script>
 // ======================================================================
@@ -594,6 +595,23 @@ function initCloud() {
     return false;
   }
   useCloud = true;
+  setSyncBadge("⏳ Connectant…", false);
+  // Inici de sessió anònim: les regles exigeixen auth != null (la BBDD no és pública)
+  let started = false;
+  const start = () => { if (!started) { started = true; startCloudSync(); } };
+  if (firebase.auth) {
+    firebase.auth().onAuthStateChanged(user => { if (user) start(); });
+    firebase.auth().signInAnonymously().catch(err => {
+      // Si l'auth anònima no està activada encara, connecta igualment (regles obertes)
+      start();
+    });
+  } else {
+    start(); // sense SDK d'auth: funciona si les regles són obertes
+  }
+  return true;
+}
+
+function startCloudSync() {
   // Índex d'esdeveniments (per al selector)
   db.ref("cadaques/_index").on("value", (snap) => {
     eventsIndex = snap.val() || {};
@@ -607,7 +625,6 @@ function initCloud() {
     renderEventPicker();
   });
   subscribeEvent(currentEventId);
-  return true;
 }
 
 function subscribeEvent(id) {

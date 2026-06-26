@@ -25,11 +25,11 @@ Cada parella *(àpat × persona present)* és una **unitat**. El cost d'una desp
 
 1. Ves a [console.firebase.google.com](https://console.firebase.google.com) i crea un projecte (gratuït).
 2. Menú **Build → Realtime Database → Crear base de dades**. Tria una regió (ex: `europe-west1`) i comença en **mode de prova** (test mode).
-3. A **Regles** de la Realtime Database, perquè el grup pugui llegir i escriure amb l'enllaç secret:
+3. Activa l'**autenticació anònima**: *Build → Authentication → Sign-in method → Anonymous → Activar*. (L'app inicia sessió sola, sense que ningú faci res.)
+4. A **Regles** de la Realtime Database, exigeix estar autenticat (així la BBDD no és pública):
    ```json
-   { "rules": { ".read": true, ".write": true } }
+   { "rules": { ".read": "auth != null", ".write": "auth != null" } }
    ```
-   (Accés per URL secreta — qualsevol amb l'enllaç pot editar.)
 4. **⚙️ → Configuració del projecte → Les teves apps → Web (</>)**: registra una app i copia l'objecte `firebaseConfig`.
 5. Enganxa'l dins de `FIREBASE_CONFIG` a `index.html` (a dalt del primer `<script>`), descomentant les línies.
 6. Puja-ho i obre la web. Hauria de sortir **🟢 Sincronitzat** a dalt.
